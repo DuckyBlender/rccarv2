@@ -1,5 +1,6 @@
 import RPi.GPIO as GPIO
-from flask import Flask, make_response, send_file, Response
+from flask import Flask, make_response, send_file, Response, jsonify, request
+from flask_socketio import SocketIO, emit
 import threading
 import time
 import cv2
@@ -8,8 +9,10 @@ import piexif
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
+import re
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Define GPIO pins
 PWMA = 12
@@ -40,118 +43,55 @@ GPIO.output(STBY, GPIO.LOW)  # Initially in standby
 
 status = {'state': 'Stopped', 'speed': 0}
 
-def set_motor_directions(direction):
-    if direction == 'forward':
+@socketio.on('motor_command')
+def handle_motor_command(data):
+    # data should be a dict: { 'a': int, 'b': int }
+    try:
+        a = int(data.get('a', 0))
+        b = int(data.get('b', 0))
+    except (ValueError, TypeError):
+        emit('motor_status', {'error': 'Invalid motor values'})
+        return
+    a = max(-100, min(100, a))
+    b = max(-100, min(100, b))
+    pwmA.ChangeDutyCycle(abs(a))
+    pwmB.ChangeDutyCycle(abs(b))
+    # Set direction based on sign
+    if a > 0:
         GPIO.output(AIN1, GPIO.HIGH)
         GPIO.output(AIN2, GPIO.LOW)
-        GPIO.output(BIN1, GPIO.HIGH)
-        GPIO.output(BIN2, GPIO.LOW)
-    elif direction == 'backward':
+    elif a < 0:
         GPIO.output(AIN1, GPIO.LOW)
         GPIO.output(AIN2, GPIO.HIGH)
-        GPIO.output(BIN1, GPIO.LOW)
-        GPIO.output(BIN2, GPIO.HIGH)
-    elif direction == 'left':
+    else:
         GPIO.output(AIN1, GPIO.LOW)
-        GPIO.output(AIN2, GPIO.HIGH)
+        GPIO.output(AIN2, GPIO.LOW)
+    if b > 0:
         GPIO.output(BIN1, GPIO.HIGH)
         GPIO.output(BIN2, GPIO.LOW)
-    elif direction == 'right':
-        GPIO.output(AIN1, GPIO.HIGH)
-        GPIO.output(AIN2, GPIO.LOW)
+    elif b < 0:
         GPIO.output(BIN1, GPIO.LOW)
         GPIO.output(BIN2, GPIO.HIGH)
-    else:  # stop
-        GPIO.output(AIN1, GPIO.LOW)
-        GPIO.output(AIN2, GPIO.LOW)
+    else:
         GPIO.output(BIN1, GPIO.LOW)
         GPIO.output(BIN2, GPIO.LOW)
+    GPIO.output(STBY, GPIO.HIGH if (a != 0 or b != 0) else GPIO.LOW)
+    status['state'] = f"Motors: A={a} B={b}"
+    status['speed'] = f"A={a} B={b}"
+    emit('motor_status', status)
 
-@app.route('/spinleft/<int:speed>')
-def spinleft(speed):
-    # Left spin: left motor backward, right motor forward
-    GPIO.output(AIN1, GPIO.LOW)
-    GPIO.output(AIN2, GPIO.HIGH)
-    GPIO.output(BIN1, GPIO.HIGH)
-    GPIO.output(BIN2, GPIO.LOW)
-    pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(speed)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Spin Left'
-    status['speed'] = speed
-    return status
-
-@app.route('/spinright/<int:speed>')
-def spinright(speed):
-    # Right spin: left motor forward, right motor backward
-    GPIO.output(AIN1, GPIO.HIGH)
-    GPIO.output(AIN2, GPIO.LOW)
-    GPIO.output(BIN1, GPIO.LOW)
-    GPIO.output(BIN2, GPIO.HIGH)
-    pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(speed)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Spin Right'
-    status['speed'] = speed
-    return status
-
-@app.route('/forward/<int:speed>')
-def forward(speed):
-    set_motor_directions('forward')
-    pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(speed)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Forward'
-    status['speed'] = speed
-    return status
-
-@app.route('/backward/<int:speed>')
-def backward(speed):
-    set_motor_directions('backward')
-    pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(speed)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Backward'
-    status['speed'] = speed
-    return status
-
-@app.route('/left/<int:speed>')
-def left(speed):
-    # Only run right motor forward for left turn
-    GPIO.output(AIN1, GPIO.LOW)
-    GPIO.output(AIN2, GPIO.LOW)
-    GPIO.output(BIN1, GPIO.HIGH)
-    GPIO.output(BIN2, GPIO.LOW)
+@socketio.on('stop_command')
+def handle_stop_command():
     pwmA.ChangeDutyCycle(0)
-    pwmB.ChangeDutyCycle(speed)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Left'
-    status['speed'] = speed
-    return status
-
-@app.route('/right/<int:speed>')
-def right(speed):
-    # Only run left motor forward for right turn
-    GPIO.output(AIN1, GPIO.HIGH)
+    pwmB.ChangeDutyCycle(0)
+    GPIO.output(AIN1, GPIO.LOW)
     GPIO.output(AIN2, GPIO.LOW)
     GPIO.output(BIN1, GPIO.LOW)
     GPIO.output(BIN2, GPIO.LOW)
-    pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(0)
-    GPIO.output(STBY, GPIO.HIGH)
-    status['state'] = 'Right'
-    status['speed'] = speed
-    return status
-
-@app.route('/stop')
-def stop():
-    set_motor_directions('stop')
-    pwmA.ChangeDutyCycle(0)
-    pwmB.ChangeDutyCycle(0)
     GPIO.output(STBY, GPIO.LOW)
     status['state'] = 'Stopped'
-    status['speed'] = 0
-    return status
+    status['speed'] = 'A=0 B=0'
+    emit('motor_status', status)
 
 @app.route('/status')
 def get_status():
@@ -210,5 +150,6 @@ def mjpeg_stream():
             time.sleep(1/30)  # Limit to 30 FPS
     return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    socketio.run(app, host='0.0.0.0', port=25565)

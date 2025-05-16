@@ -1,192 +1,523 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Motor Control Panel</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPi Car Control</title>
     <style>
+        :root {
+            --primary-bg: #1a1a1a;
+            --secondary-bg: #2c2c2c;
+            --tertiary-bg: #3f3f3f;
+            --primary-text: #e0e0e0;
+            --accent-color: #007bff;
+            --accent-hover: #0056b3;
+            --danger-color: #dc3545;
+            --danger-hover: #c82333;
+            --success-color: #28a745;
+            --success-hover: #218838;
+            --border-color: #4a4a4a;
+            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
         body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-            text-align: center;
+            background-color: var(--primary-bg);
+            color: var(--primary-text);
+            font-family: var(--font-family);
+            margin: 0;
             padding: 20px;
-        }
-        h1 {
-            margin-bottom: 20px;
-        }
-        .controls {
             display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            gap: 15px;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            line-height: 1.6;
         }
-        .main-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            grid-template-rows: 1fr 1fr 1fr;
-            grid-gap: 15px;
-            width: 500px;
-        }
-        .main-buttons button {
-            padding: 20px;
-            font-size: 24px;
-            background-color: #1e1e1e;
-            border: 2px solid #555;
-            color: white;
-            cursor: pointer;
-            transition: background-color 0.3s;
+
+        header {
             width: 100%;
-            min-width: 150px;
+            text-align: center;
+            margin-bottom: 30px;
         }
-        .main-buttons button:hover {
-            background-color: #333;
+
+        header h1 {
+            font-size: 2.8em;
+            color: var(--accent-color);
+            margin: 0;
+            font-weight: 600;
         }
-        .speed-control-vertical {
+
+        .main-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            width: 100%;
+            max-width: 1300px;
+            justify-content: center;
+        }
+
+        .panel {
+            background-color: var(--secondary-bg);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.35);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            margin-left: 30px;
+            gap: 20px;
+        }
+
+        .camera-section {
+            flex: 2 1 600px; /* Flex-grow, flex-shrink, flex-basis */
+        }
+
+        .controls-section {
+            flex: 1 1 350px;
+        }
+        
+        .panel h2 {
             margin-top: 0;
+            color: var(--primary-text);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 12px;
+            font-size: 1.6em;
+            font-weight: 500;
         }
-        .speed-value {
-            font-size: 22px;
-            margin: 10px 0;
+
+        .camera-section img {
+            width: 100%;
+            height: auto;
+            max-height: 500px; /* Adjusted for better viewing */
+            border: 3px solid var(--border-color);
+            background-color: #000;
+            border-radius: 6px;
+            object-fit: cover; /* Ensures the image covers the area nicely */
         }
-        input[type="range"].vertical {
-            writing-mode: vertical-lr;
-            direction: rtl;
-            appearance: slider-vertical;
-            width: 30px;
-            height: 250px;
+        
+        .control-group {
+            background-color: var(--tertiary-bg);
+            padding: 18px;
+            border-radius: 8px;
         }
-        .keyboard-controls {
-            margin-top: 30px;
-            font-size: 20px;
+
+        .control-group h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: var(--primary-text);
+            font-size: 1.25em;
+            font-weight: 500;
         }
-        .keyboard-controls p {
-            margin: 10px 0;
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, auto);
+            gap: 12px;
+            align-items: center;
+            justify-items: center;
         }
-        .camera-container {
-            margin-left: 40px;
+
+        .buttons-grid button {
+            width: 100%;
+            min-height: 65px; /* Ensure buttons have a good height */
+            font-size: 1.3em;
+            font-weight: bold;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .buttons-grid button:hover {
+            background-color: var(--accent-hover);
+        }
+        .buttons-grid button:active {
+            transform: scale(0.95);
+        }
+
+        .buttons-grid .stop-button {
+            grid-column: 2;
+            grid-row: 2;
+            background-color: var(--danger-color);
+        }
+        .buttons-grid .stop-button:hover {
+            background-color: var(--danger-hover);
+        }
+        .buttons-grid .button-w { grid-column: 2; grid-row: 1; }
+        .buttons-grid .button-a { grid-column: 1; grid-row: 2; }
+        .buttons-grid .button-s { grid-column: 2; grid-row: 3; }
+        .buttons-grid .button-d { grid-column: 3; grid-row: 2; }
+
+        .speed-slider-container {
             display: flex;
             flex-direction: column;
             align-items: center;
+            gap: 8px;
         }
-        .camera-container h2 {
-            color: #fff;
-            font-size: 20px;
-            margin-bottom: 10px;
+
+        .speed-slider-container input[type="range"] {
+            width: 90%;
+            cursor: pointer;
+            margin-top: 5px;
+            accent-color: var(--accent-color); /* Modern way to style slider thumb */
         }
-        .camera-container img {
-            width: 320px * 2;
-            height: 240px * 2;
-            border: 2px solid #555;
-            background: #000;
+        #speedValue {
+            font-size: 1.1em;
+            font-weight: 500;
         }
+
+        .status-display, .gamepad-status {
+            background-color: var(--tertiary-bg);
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 1em;
+            min-height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            word-break: break-all;
+        }
+
+        #connectGamepadButton {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            font-weight: 500;
+            background-color: var(--success-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+        #connectGamepadButton:hover {
+            background-color: var(--success-hover);
+        }
+
+        footer {
+            width: 100%;
+            max-width: 1300px;
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.95em;
+            color: #b0b0b0;
+            background-color: var(--secondary-bg);
+            border-radius: 0 0 10px 10px;
+        }
+        footer p { margin: 5px 0; }
+        footer a { color: var(--accent-color); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
     </style>
 </head>
 <body>
-    <h1>Motor Control Panel</h1>
-    <div class="controls">
-        <div class="main-buttons">
-            <button style="grid-column: 1; grid-row: 1;" onclick="sendRequest('/spinleft', speedSlider.value)">⟲ Spin Left</button>
-            <button style="grid-column: 2; grid-row: 1;" onclick="sendRequest('/forward', speedSlider.value)">Forward</button>
-            <button style="grid-column: 3; grid-row: 1;" onclick="sendRequest('/spinright', speedSlider.value)">Spin Right ⟳</button>
-            <button style="grid-column: 1; grid-row: 2;" onclick="sendRequest('/left', speedSlider.value)">Left</button>
-            <button style="grid-column: 2; grid-row: 2;" onclick="sendRequest('/stop')">Stop</button>
-            <button style="grid-column: 3; grid-row: 2;" onclick="sendRequest('/right', speedSlider.value)">Right</button>
-            <button style="grid-column: 2; grid-row: 3;" onclick="sendRequest('/backward', speedSlider.value)">Backward</button>
-        </div>
-        <div class="speed-control-vertical">
-            <span class="speed-value" id="speedValue">50%</span>
-            <input type="range" id="speedSlider" min="0" max="100" value="50" class="vertical">
-        </div>
-        <div class="camera-container">
-            <h2>Camera</h2>
-            <img id="mjpegStream" src="http://raspberrypi.local:5000/mjpeg" alt="Camera Stream">
-        </div>
+    <header>
+        <h1>RPi Robotic Car Control</h1>
+    </header>
+
+    <div class="main-container">
+        <section class="panel camera-section">
+            <h2>Live Camera Feed</h2>
+            <img id="mjpegStream" src="/mjpeg" alt="Camera Stream Loading...">
+        </section>
+
+        <section class="panel controls-section">
+            <div class="control-group">
+                <h3>Manual Controls</h3>
+                <div class="buttons-grid">
+                    <button class="button-w" data-key="w">W</button>
+                    <button class="button-a" data-key="a">A</button>
+                    <button class="stop-button" data-key="stop">STOP</button>
+                    <button class="button-s" data-key="s">S</button>
+                    <button class="button-d" data-key="d">D</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Speed Adjustment</h3>
+                <div class="speed-slider-container">
+                    <input type="range" id="speedSlider" min="0" max="100" value="50">
+                    <span id="speedValue">50%</span>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Motor Status</h3>
+                <div id="motorStatus" class="status-display">Awaiting command...</div>
+            </div>
+
+            <div class="control-group">
+                <h3>Gamepad Control</h3>
+                <button id="connectGamepadButton">Connect Gamepad</button>
+                <div id="gamepadInfo" class="gamepad-status">Click "Connect Gamepad" and select your controller.</div>
+            </div>
+        </section>
     </div>
-    <div id="statusDisplay" style="margin-top:20px;font-size:22px;"></div>
 
+    <footer>
+        <p><strong>Gamepad Instructions:</strong> For best results, use a Chrome-based browser (Chrome, Edge, Opera). Click the "Connect Gamepad" button above and select your controller from the HID device list if prompted. Standard Gamepad API will be used after permission.</p>
+        <p>Keyboard controls: WASD for movement. Spacebar for STOP.</p>
+        <p>&copy; ${new Date().getFullYear()} RPi Car Project</p>
+    </footer>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        function sendRequest(endpoint, speed) {
-            let url = endpoint === '/stop' ? `http://raspberrypi.local:5000${endpoint}` : `http://raspberrypi.local:5000${endpoint}/${speed}`;
-            fetch(url, { method: 'GET' })
-                .then(response => response.json())
-                .then(data => {
-                    if (typeof data === 'string') {
-                        document.getElementById('statusDisplay').textContent = data;
-                    } else if (data && typeof data.state !== 'undefined') {
-                        document.getElementById('statusDisplay').textContent = `Status: ${data.state} | Speed: ${data.speed}%`;
-                    } else {
-                        document.getElementById('statusDisplay').textContent = 'Status: unavailable';
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('statusDisplay').textContent = 'Status: unavailable';
-                });
+        const motorStatusEl = document.getElementById('motorStatus');
+        const gamepadInfoEl = document.getElementById('gamepadInfo');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValueEl = document.getElementById('speedValue');
+        const connectGamepadButton = document.getElementById('connectGamepadButton');
+
+        let currentSpeed = parseInt(speedSlider.value);
+        const keyState = { w: false, a: false, s: false, d: false };
+        let activeGamepad = null;
+        let lastMotorCmd = { a: 0, b: 0 };
+        let lastSentCmd = { a: null, b: null };
+        let wsConnected = false;
+        let socket = null;
+        const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
+
+        function setupSocket() {
+            socket = io();
+            socket.on('connect', () => {
+                wsConnected = true;
+                motorStatusEl.textContent = 'WebSocket connected';
+            });
+            socket.on('disconnect', () => {
+                wsConnected = false;
+                motorStatusEl.textContent = 'WebSocket disconnected';
+            });
+            socket.on('motor_status', (data) => {
+                if (data && data.state) {
+                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
+                }
+            });
+        }
+        setupSocket();
+
+        function sendMotorCommandWS(targetMotorA, targetMotorB) {
+            if (!wsConnected) return;
+            // Scale raw motor values (-100 to 100) by currentSpeed
+            const finalA = Math.round(Math.max(-100, Math.min(100, targetMotorA)) * (currentSpeed / 100));
+            const finalB = Math.round(Math.max(-100, Math.min(100, targetMotorB)) * (currentSpeed / 100));
+            // Debounce: Only send if values changed
+            if (finalA === lastSentCmd.a && finalB === lastSentCmd.b) return;
+            lastSentCmd = { a: finalA, b: finalB };
+            socket.emit('motor_command', { a: finalA, b: finalB });
+        }
+        function sendStopCommandWS() {
+            if (!wsConnected) return;
+            lastSentCmd = { a: 0, b: 0 };
+            socket.emit('stop_command');
         }
 
-        function updateStatus() {
-            fetch('http://raspberrypi.local:5000/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (typeof data === 'string') {
-                        document.getElementById('statusDisplay').textContent = data;
-                    } else if (data && typeof data.state !== 'undefined') {
-                        document.getElementById('statusDisplay').textContent = `Status: ${data.state} | Speed: ${data.speed}%`;
-                    } else {
-                        document.getElementById('statusDisplay').textContent = 'Status: unavailable';
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('statusDisplay').textContent = 'Status: unavailable';
-                });
+        function updateSpeedDisplay() {
+            currentSpeed = parseInt(speedSlider.value);
+            speedValueEl.textContent = `${currentSpeed}%`;
+            // If a movement command is active (e.g. key held or joystick moved), resend with new speed
+            if (Object.values(keyState).some(s => s) || activeGamepad) {
+                handleMovement();
+            }
+        }
+        speedSlider.addEventListener('input', updateSpeedDisplay);
+        updateSpeedDisplay();
+
+        function handleMovement() {
+            // Prioritize gamepad if active and providing input
+            if (activeGamepad && pollGamepadInput()) {
+                return;
+            }
+            // Keyboard movement
+            let y = 0;
+            let x = 0;
+            if (keyState.w) y = 100;
+            else if (keyState.s) y = -100;
+            if (keyState.a) x = -100;
+            else if (keyState.d) x = 100;
+            if (y === 0 && x === 0) {
+                sendStopCommandWS();
+                return;
+            }
+            let motorA, motorB;
+            if (y !== 0) {
+                motorA = y;
+                motorB = y;
+                if (x < 0) {
+                    motorA = y * 0.3;
+                } else if (x > 0) {
+                    motorB = y * 0.3;
+                }
+            } else {
+                motorA = x;
+                motorB = -x;
+            }
+            sendMotorCommandWS(motorA, motorB);
         }
 
-        // Initial status fetch
-        updateStatus();
-
-        // Handle keyboard events (WASD, Arrow keys, Q/E for spin)
-        let keyDown = false;
-        document.addEventListener('keydown', function(event) {
-            if (event.repeat) return;
-            if (keyDown) return;
-            keyDown = true;
+        // --- Keyboard Event Listeners ---
+        document.addEventListener('keydown', (event) => {
             const key = event.key.toLowerCase();
-            if (key === 'w' || event.key === 'arrowup') {
-                sendRequest('/forward', speedSlider.value);
-                event.preventDefault();
-            } else if (key === 's' || event.key === 'arrowdown') {
-                sendRequest('/backward', speedSlider.value);
-                event.preventDefault();
-            } else if (key === 'a' || event.key === 'arrowleft') {
-                sendRequest('/left', speedSlider.value);
-                event.preventDefault();
-            } else if (key === 'd' || event.key === 'arrowright') {
-                sendRequest('/right', speedSlider.value);
-                event.preventDefault();
-            } else if (key === 'q') {
-                sendRequest('/spinleft', speedSlider.value);
-                event.preventDefault();
-            } else if (key === 'e') {
-                sendRequest('/spinright', speedSlider.value);
-                event.preventDefault();
+            if (keyState.hasOwnProperty(key) && !keyState[key]) {
+                keyState[key] = true;
+                handleMovement();
             } else if (key === ' ') {
-                sendRequest('/stop');
                 event.preventDefault();
+                sendStopCommandWS();
             }
         });
-        document.addEventListener('keyup', function(event) {
-            keyDown = false;
-            sendRequest('/stop');
+        document.addEventListener('keyup', (event) => {
+            const key = event.key.toLowerCase();
+            if (keyState.hasOwnProperty(key)) {
+                keyState[key] = false;
+                if (!Object.values(keyState).some(s => s) && !activeGamepad) {
+                    handleMovement();
+                } else {
+                    handleMovement();
+                }
+            }
+        });
+        // --- On-Screen Button Listeners ---
+        document.querySelectorAll('.buttons-grid button').forEach(button => {
+            const key = button.dataset.key;
+            function pressButton() {
+                if (key === 'stop') {
+                    sendStopCommandWS();
+                } else if (keyState.hasOwnProperty(key)) {
+                    keyState[key] = true;
+                    handleMovement();
+                }
+            }
+            function releaseButton() {
+                if (key !== 'stop' && keyState.hasOwnProperty(key)) {
+                    keyState[key] = false;
+                    handleMovement();
+                }
+            }
+            button.addEventListener('mousedown', pressButton);
+            button.addEventListener('mouseup', releaseButton);
+            button.addEventListener('mouseleave', () => {
+                if (key !== 'stop' && keyState[key]) releaseButton();
+            });
+            button.addEventListener('touchstart', (e) => { e.preventDefault(); pressButton(); }, { passive: false });
+            button.addEventListener('touchend', (e) => { e.preventDefault(); releaseButton(); });
         });
 
-        function updateSpeedValue() {
-            const val = speedSlider.value;
-            document.getElementById('speedValue').textContent = val + '%';
+        // --- Gamepad Logic ---
+        let lastGamepadActive = false;
+        connectGamepadButton.addEventListener('click', async () => {
+            if (!navigator.hid) {
+                gamepadInfoEl.innerHTML = "WebHID API not supported. <br>Please use Chrome, Edge, or Opera.";
+                return;
+            }
+            try {
+                const devices = await navigator.hid.requestDevice({ filters: [] });
+                if (devices.length > 0) {
+                    gamepadInfoEl.textContent = "HID device access granted. Checking for gamepads...";
+                } else {
+                    gamepadInfoEl.textContent = "No HID device selected. Gamepad may not be accessible.";
+                }
+                scanGamepads();
+            } catch (error) {
+                gamepadInfoEl.textContent = "Could not get HID permission. Gamepad may not work.";
+                console.error("HID permission error:", error);
+            }
+        });
+        function scanGamepads() {
+            const gamepads = navigator.getGamepads();
+            for (const gp of gamepads) {
+                if (gp) {
+                    handleGamepadConnected(gp);
+                    return;
+                }
+            }
         }
-        speedSlider.addEventListener('input', updateSpeedValue);
-        updateSpeedValue();
+        function handleGamepadConnected(gp) {
+            activeGamepad = gp;
+            gamepadInfoEl.textContent = `Gamepad: ${gp.id.substring(0,25)}...`;
+            connectGamepadButton.style.display = 'none';
+            requestAnimationFrame(gamepadLoop);
+        }
+        function handleGamepadDisconnected(event) {
+            if (activeGamepad && activeGamepad.index === event.gamepad.index) {
+                activeGamepad = null;
+                gamepadInfoEl.textContent = "Gamepad disconnected. Reconnect or use keyboard.";
+                connectGamepadButton.style.display = 'block';
+                sendStopCommandWS();
+            }
+        }
+        window.addEventListener("gamepadconnected", (e) => handleGamepadConnected(e.gamepad));
+        window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
+        function pollGamepadInput() {
+            if (!activeGamepad) return false;
+            const gp = navigator.getGamepads()[activeGamepad.index];
+            if (!gp) {
+                activeGamepad = null;
+                lastGamepadActive = false;
+                return false;
+            }
+            const leftStickX = gp.axes[0];
+            const leftStickY = gp.axes[1];
+            const deadzone = 0.20;
+            let yInput = Math.abs(leftStickY) > deadzone ? leftStickY * 100 : 0;
+            let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0; // xInput in range [-1,1]
+            if (yInput === 0 && xInput === 0) {
+                if (lastGamepadActive) {
+                    if (!Object.values(keyState).some(s => s)) {
+                        sendStopCommandWS();
+                    }
+                    lastGamepadActive = false;
+                }
+                return false;
+            }
+            lastGamepadActive = true;
+            let motorA_gp, motorB_gp;
+            if (yInput !== 0) {
+                // Linear scaling for tank drive
+                // Up = -100, Down = 100, so invert yInput for forward
+                const speed = -yInput;
+                // xInput in [-1,1], left = -1, right = 1
+                const leftScale = xInput < 0 ? 1 - Math.abs(xInput) : 1;
+                const rightScale = xInput > 0 ? 1 - Math.abs(xInput) : 1;
+                motorA_gp = speed * leftScale;
+                motorB_gp = speed * rightScale;
+            } else {
+                // Pivot in place
+                motorA_gp = xInput * 100;
+                motorB_gp = -xInput * 100;
+            }
+            sendMotorCommandWS(motorA_gp, motorB_gp);
+            gamepadInfoEl.textContent = `Gamepad Active | LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)} | Motors A:${lastSentCmd.a} B:${lastSentCmd.b}`;
+            return true;
+        }
+        function gamepadLoop() {
+            if (!activeGamepad) return;
+            pollGamepadInput();
+            requestAnimationFrame(gamepadLoop);
+        }
+        // --- Initial Status Fetch ---
+        async function fetchInitialStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                if (data && data.state) {
+                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
+                }
+            } catch (error) {
+                console.error('Error fetching initial status:', error);
+                motorStatusEl.textContent = 'Status: Error connecting to car.';
+            }
+        }
+        document.querySelector('footer p:last-child').textContent = `© ${new Date().getFullYear()} RPi Car Project`;
+        fetchInitialStatus();
+        scanGamepads();
     </script>
 </body>
 </html>
