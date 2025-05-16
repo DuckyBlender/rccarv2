@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Motor Control Panel</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        .main-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr 1fr;
+            grid-gap: 15px;
+            width: 500px;
+        }
+        .main-buttons button {
+            padding: 20px;
+            font-size: 24px;
+            background-color: #1e1e1e;
+            border: 2px solid #555;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+            min-width: 150px;
+        }
+        .main-buttons button:hover {
+            background-color: #333;
+        }
+        .speed-control-vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-left: 30px;
+            margin-top: 0;
+        }
+        .speed-value {
+            font-size: 22px;
+            margin: 10px 0;
+        }
+        input[type="range"].vertical {
+            writing-mode: vertical-lr;
+            direction: rtl;
+            appearance: slider-vertical;
+            width: 30px;
+            height: 250px;
+        }
+        .keyboard-controls {
+            margin-top: 30px;
+            font-size: 20px;
+        }
+        .keyboard-controls p {
+            margin: 10px 0;
+        }
+        .camera-container {
+            margin-left: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .camera-container h2 {
+            color: #fff;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .camera-container img {
+            width: 320px * 2;
+            height: 240px * 2;
+            border: 2px solid #555;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <h1>Motor Control Panel</h1>
+    <div class="controls">
+        <div class="main-buttons">
+            <button style="grid-column: 1; grid-row: 1;" onclick="sendRequest('/spinleft', speedSlider.value)">⟲ Spin Left</button>
+            <button style="grid-column: 2; grid-row: 1;" onclick="sendRequest('/forward', speedSlider.value)">Forward</button>
+            <button style="grid-column: 3; grid-row: 1;" onclick="sendRequest('/spinright', speedSlider.value)">Spin Right ⟳</button>
+            <button style="grid-column: 1; grid-row: 2;" onclick="sendRequest('/left', speedSlider.value)">Left</button>
+            <button style="grid-column: 2; grid-row: 2;" onclick="sendRequest('/stop')">Stop</button>
+            <button style="grid-column: 3; grid-row: 2;" onclick="sendRequest('/right', speedSlider.value)">Right</button>
+            <button style="grid-column: 2; grid-row: 3;" onclick="sendRequest('/backward', speedSlider.value)">Backward</button>
+        </div>
+        <div class="speed-control-vertical">
+            <span class="speed-value" id="speedValue">50%</span>
+            <input type="range" id="speedSlider" min="0" max="100" value="50" class="vertical">
+        </div>
+        <div class="camera-container">
+            <h2>Camera</h2>
+            <img id="mjpegStream" src="http://raspberrypi.local:5000/mjpeg" alt="Camera Stream">
+        </div>
+    </div>
+    <div id="statusDisplay" style="margin-top:20px;font-size:22px;"></div>
+
+    <script>
+        function sendRequest(endpoint, speed) {
+            let url = endpoint === '/stop' ? `http://raspberrypi.local:5000${endpoint}` : `http://raspberrypi.local:5000${endpoint}/${speed}`;
+            fetch(url, { method: 'GET' })
+                .then(response => response.json())
+                .then(data => {
+                    if (typeof data === 'string') {
+                        document.getElementById('statusDisplay').textContent = data;
+                    } else if (data && typeof data.state !== 'undefined') {
+                        document.getElementById('statusDisplay').textContent = `Status: ${data.state} | Speed: ${data.speed}%`;
+                    } else {
+                        document.getElementById('statusDisplay').textContent = 'Status: unavailable';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('statusDisplay').textContent = 'Status: unavailable';
+                });
+        }
+
+        function updateStatus() {
+            fetch('http://raspberrypi.local:5000/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (typeof data === 'string') {
+                        document.getElementById('statusDisplay').textContent = data;
+                    } else if (data && typeof data.state !== 'undefined') {
+                        document.getElementById('statusDisplay').textContent = `Status: ${data.state} | Speed: ${data.speed}%`;
+                    } else {
+                        document.getElementById('statusDisplay').textContent = 'Status: unavailable';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('statusDisplay').textContent = 'Status: unavailable';
+                });
+        }
+
+        // Initial status fetch
+        updateStatus();
+
+        // Handle keyboard events (WASD, Arrow keys, Q/E for spin)
+        let keyDown = false;
+        document.addEventListener('keydown', function(event) {
+            if (event.repeat) return;
+            if (keyDown) return;
+            keyDown = true;
+            const key = event.key.toLowerCase();
+            if (key === 'w' || event.key === 'arrowup') {
+                sendRequest('/forward', speedSlider.value);
+                event.preventDefault();
+            } else if (key === 's' || event.key === 'arrowdown') {
+                sendRequest('/backward', speedSlider.value);
+                event.preventDefault();
+            } else if (key === 'a' || event.key === 'arrowleft') {
+                sendRequest('/left', speedSlider.value);
+                event.preventDefault();
+            } else if (key === 'd' || event.key === 'arrowright') {
+                sendRequest('/right', speedSlider.value);
+                event.preventDefault();
+            } else if (key === 'q') {
+                sendRequest('/spinleft', speedSlider.value);
+                event.preventDefault();
+            } else if (key === 'e') {
+                sendRequest('/spinright', speedSlider.value);
+                event.preventDefault();
+            } else if (key === ' ') {
+                sendRequest('/stop');
+                event.preventDefault();
+            }
+        });
+        document.addEventListener('keyup', function(event) {
+            keyDown = false;
+            sendRequest('/stop');
+        });
+
+        function updateSpeedValue() {
+            const val = speedSlider.value;
+            document.getElementById('speedValue').textContent = val + '%';
+        }
+        speedSlider.addEventListener('input', updateSpeedValue);
+        updateSpeedValue();
+    </script>
+</body>
+</html>

@@ -1,7 +1,13 @@
 import RPi.GPIO as GPIO
-from flask import Flask, make_response
+from flask import Flask, make_response, send_file, Response
 import threading
 import time
+import cv2
+import io
+import piexif
+from picamera2 import Picamera2
+from picamera2.encoders import MJPEGEncoder
+from picamera2.outputs import FileOutput
 
 app = Flask(__name__)
 
@@ -111,8 +117,12 @@ def backward(speed):
 
 @app.route('/left/<int:speed>')
 def left(speed):
-    set_motor_directions('left')
-    pwmA.ChangeDutyCycle(speed)
+    # Only run right motor forward for left turn
+    GPIO.output(AIN1, GPIO.LOW)
+    GPIO.output(AIN2, GPIO.LOW)
+    GPIO.output(BIN1, GPIO.HIGH)
+    GPIO.output(BIN2, GPIO.LOW)
+    pwmA.ChangeDutyCycle(0)
     pwmB.ChangeDutyCycle(speed)
     GPIO.output(STBY, GPIO.HIGH)
     status['state'] = 'Left'
@@ -121,9 +131,13 @@ def left(speed):
 
 @app.route('/right/<int:speed>')
 def right(speed):
-    set_motor_directions('right')
+    # Only run left motor forward for right turn
+    GPIO.output(AIN1, GPIO.HIGH)
+    GPIO.output(AIN2, GPIO.LOW)
+    GPIO.output(BIN1, GPIO.LOW)
+    GPIO.output(BIN2, GPIO.LOW)
     pwmA.ChangeDutyCycle(speed)
-    pwmB.ChangeDutyCycle(speed)
+    pwmB.ChangeDutyCycle(0)
     GPIO.output(STBY, GPIO.HIGH)
     status['state'] = 'Right'
     status['speed'] = speed
@@ -145,121 +159,56 @@ def get_status():
 
 @app.route('/')
 def index():
-    with open('index.html', 'r') as f:
-        return f.read(), 200, {'Content-Type': 'text/html'}
+    return send_file('autko.html')
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-
-creamers@raspberrypi:~ $ ^C
-creamers@raspberrypi:~ $ ls
-autko  autko2  main2.py  main3.py  main4.py
-creamers@raspberrypi:~ $ cat main4.py 
-#!/usr/bin/python3
-
-# This is the same as mjpeg_server_2.py, but allows 90 or 270 degree rotations.
-
-import io
-import logging
-import socketserver
-from http import server
-from threading import Condition
-
-import piexif
-
-from picamera2 import Picamera2
-from picamera2.encoders import MJPEGEncoder
-from picamera2.outputs import FileOutput
-
-ROTATION = 270  # Use 0, 90 or 270
 WIDTH = 640
 HEIGHT = 480
 
 rotation_header = bytes()
-if ROTATION:
-    WIDTH, HEIGHT = HEIGHT, WIDTH
-    code = 6 if ROTATION == 90 else 8
-    exif_bytes = piexif.dump({'0th': {piexif.ImageIFD.Orientation: code}})
-    exif_len = len(exif_bytes) + 2
-    rotation_header = bytes.fromhex('ffe1') + exif_len.to_bytes(2, 'big') + exif_bytes
-
-PAGE = f"""\
-<html>
-<head>
-<title>picamera2 MJPEG streaming demo</title>
-</head>
-<body>
-<h1>Picamera2 MJPEG Streaming Demo</h1>
-<img src="stream.mjpg" width="{WIDTH}" height="{HEIGHT}" />
-</body>
-</html>
-"""
-
+WIDTH, HEIGHT = HEIGHT, WIDTH
+code = 3 # Rotate 180 degrees
+exif_bytes = piexif.dump({'0th': {piexif.ImageIFD.Orientation: code}})
+exif_len = len(exif_bytes) + 2
+rotation_header = bytes.fromhex('ffe1') + exif_len.to_bytes(2, 'big') + exif_bytes
 
 class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
-        self.condition = Condition()
+        self.condition = threading.Condition()
 
     def write(self, buf):
         with self.condition:
             self.frame = buf[:2] + rotation_header + buf[2:]
             self.condition.notify_all()
 
+# Global camera and output
+picam2 = None
+output = None
 
-class StreamingHandler(server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/':
-            self.send_response(301)
-            self.send_header('Location', '/index.html')
-            self.end_headers()
-        elif self.path == '/index.html':
-            content = PAGE.encode('utf-8')
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html')
-            self.send_header('Content-Length', len(content))
-            self.end_headers()
-            self.wfile.write(content)
-        elif self.path == '/stream.mjpg':
-            self.send_response(200)
-            self.send_header('Age', 0)
-            self.send_header('Cache-Control', 'no-cache, private')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
-            self.end_headers()
-            try:
-                while True:
-                    with output.condition:
-                        output.condition.wait()
-                        frame = output.frame
-                    self.wfile.write(b'--FRAME\r\n')
-                    self.send_header('Content-Type', 'image/jpeg')
-                    self.send_header('Content-Length', len(frame))
-                    self.end_headers()
-                    self.wfile.write(frame)
-                    self.wfile.write(b'\r\n')
-            except Exception as e:
-                logging.warning(
-                    'Removed streaming client %s: %s',
-                    self.client_address, str(e))
-        else:
-            self.send_error(404)
-            self.end_headers()
+def start_camera():
+    global picam2, output
+    picam2 = Picamera2()
+    picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+    output = StreamingOutput()
+    picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 
+# Start camera in a background thread on app startup
+camera_thread = threading.Thread(target=start_camera)
+camera_thread.daemon = True
+camera_thread.start()
 
-class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
-    allow_reuse_address = True
-    daemon_threads = True
+@app.route('/mjpeg')
+def mjpeg_stream():
+    def generate():
+        while True:
+            with output.condition:
+                output.condition.wait()
+                frame = output.frame
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n'
+                   b'Content-Length: ' + f"{len(frame)}".encode() + b'\r\n\r\n' + frame + b'\r\n')
+            time.sleep(1/30)  # Limit to 30 FPS
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
-picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
-output = StreamingOutput()
-picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-
-try:
-    address = ('', 8000)
-    server = StreamingServer(address, StreamingHandler)
-    server.serve_forever()
-finally:
-    picam2.stop_recording()
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
