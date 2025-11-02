@@ -64,21 +64,6 @@ try:
                              min_pulse_width=0.0005, max_pulse_width=0.0024, 
                              pin_factory=factory, initial_angle=90)
         print(f"Servos initialized with PiGPIOFactory on pins {SERVO1_PIN} and {SERVO2_PIN}")
-        # Test movement immediately
-        print("Testing servo movement...")
-        servo1.angle = 0
-        time.sleep(0.5)
-        servo1.angle = 180
-        time.sleep(0.5)
-        servo1.angle = 90
-        time.sleep(0.5)
-        servo2.angle = 0
-        time.sleep(0.5)
-        servo2.angle = 180
-        time.sleep(0.5)
-        servo2.angle = 90
-        time.sleep(0.5)
-        print("Servo test complete")
     else:
         servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, initial_angle=90)
         servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, initial_angle=90)
@@ -220,32 +205,6 @@ def handle_camera_command(data):
 @app.route('/status')
 def get_status():
     return status
-
-@app.route('/test_servo/<int:pin>/<float:angle>')
-def test_servo(pin, angle):
-    """Test route to manually test servo movement"""
-    try:
-        if pin == SERVO1_PIN:
-            servo = servo1
-        elif pin == SERVO2_PIN:
-            servo = servo2
-        else:
-            return {'error': f'Invalid pin {pin}. Use {SERVO1_PIN} or {SERVO2_PIN}'}, 400
-        
-        if not servo:
-            return {'error': 'Servo not initialized'}, 500
-        
-        angle = max(0, min(180, float(angle)))
-        print(f"Testing servo on pin {pin} to {angle} degrees")
-        servo.detach()
-        time.sleep(0.01)
-        servo.angle = angle
-        time.sleep(0.5)  # Give it time to move
-        return {'success': True, 'pin': pin, 'angle': angle, 'current_angle': servo.angle}
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {'error': str(e)}, 500
 
 @app.route('/')
 def index():
