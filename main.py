@@ -27,29 +27,62 @@ SERVO1_PIN = 26  # Camera servo 1 (horizontal/pan)
 SERVO2_PIN = 6   # Camera servo 2 (vertical/tilt)
 
 # Initialize GPIO Zero with PiGPIOFactory (for all devices to avoid jitter)
-factory = PiGPIOFactory()
+try:
+    factory = PiGPIOFactory()
+    print("Using PiGPIOFactory for hardware PWM")
+except Exception as e:
+    print(f"Warning: PiGPIOFactory failed ({e}). Using default factory.")
+    print("Make sure pigpiod service is running: sudo systemctl start pigpiod")
+    factory = None
 
 # Initialize motor control devices
-pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=100)
-pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=100)
-ain1 = OutputDevice(AIN1, pin_factory=factory)
-ain2 = OutputDevice(AIN2, pin_factory=factory)
-bin1 = OutputDevice(BIN1, pin_factory=factory)
-bin2 = OutputDevice(BIN2, pin_factory=factory)
-stby = OutputDevice(STBY, pin_factory=factory)
+if factory:
+    pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=100)
+    pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=100)
+    ain1 = OutputDevice(AIN1, pin_factory=factory)
+    ain2 = OutputDevice(AIN2, pin_factory=factory)
+    bin1 = OutputDevice(BIN1, pin_factory=factory)
+    bin2 = OutputDevice(BIN2, pin_factory=factory)
+    stby = OutputDevice(STBY, pin_factory=factory)
+else:
+    pwmA = PWMOutputDevice(PWMA, frequency=100)
+    pwmB = PWMOutputDevice(PWMB, frequency=100)
+    ain1 = OutputDevice(AIN1)
+    ain2 = OutputDevice(AIN2)
+    bin1 = OutputDevice(BIN1)
+    bin2 = OutputDevice(BIN2)
+    stby = OutputDevice(STBY)
 
 # Initialize servos using GPIO Zero with PiGPIOFactory to avoid jitter
-servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
-servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
+try:
+    if factory:
+        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
+        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
+        print(f"Servos initialized with PiGPIOFactory on pins {SERVO1_PIN} and {SERVO2_PIN}")
+    else:
+        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
+        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
+        print(f"Servos initialized with default factory on pins {SERVO1_PIN} and {SERVO2_PIN}")
+except Exception as e:
+    print(f"Error initializing servos: {e}")
+    servo1 = None
+    servo2 = None
 
 # Servo position tracking (0-180 degrees, start at 90 = center)
 servo1_position = 90
 servo2_position = 90
 
 # Set servos to center position
-servo1.angle = servo1_position
-servo2.angle = servo2_position
-time.sleep(0.5)  # Allow servos to move to center
+if servo1 and servo2:
+    try:
+        servo1.angle = servo1_position
+        servo2.angle = servo2_position
+        print(f"Servos set to center position: {servo1_position} degrees")
+        time.sleep(0.5)  # Allow servos to move to center
+    except Exception as e:
+        print(f"Error setting servo center position: {e}")
+else:
+    print("Warning: Servos not initialized!")
 
 stby.off()  # Initially in standby
 
@@ -110,18 +143,27 @@ def handle_camera_command(data):
     """Handle relative camera movement commands - only update when there's actual input"""
     global servo1_position, servo2_position
     
+    if not servo1 or not servo2:
+        print("Warning: Camera command received but servos not initialized")
+        return
+    
     # Check if this is a center command
     if data.get('center', False):
-        servo1_position = 90
-        servo2_position = 90
-        servo1.angle = 90
-        servo2.angle = 90
+        try:
+            servo1_position = 90
+            servo2_position = 90
+            servo1.angle = 90
+            servo2.angle = 90
+            print(f"Camera centered to {servo1_position} degrees")
+        except Exception as e:
+            print(f"Error centering camera: {e}")
         return
     
     try:
         pan_delta = float(data.get('pan', 0))  # Horizontal movement
         tilt_delta = float(data.get('tilt', 0))  # Vertical movement
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        print(f"Error parsing camera command: {e}")
         return
     
     # Only process if there's actual movement (avoid jitter from noise)
@@ -138,8 +180,12 @@ def handle_camera_command(data):
     servo2_position = max(0, min(180, servo2_position))
     
     # Set servo positions using GPIO Zero (handles PWM properly)
-    servo1.angle = servo1_position
-    servo2.angle = servo2_position
+    try:
+        servo1.angle = servo1_position
+        servo2.angle = servo2_position
+        print(f"Camera moved to pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
+    except Exception as e:
+        print(f"Error moving camera: {e}")
 
 @app.route('/status')
 def get_status():
