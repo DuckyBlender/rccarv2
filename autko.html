@@ -284,6 +284,8 @@
         let wsConnected = false;
         let socket = null;
         const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
+        let lastCameraCommandTime = 0;
+        const CAMERA_COMMAND_INTERVAL = 50; // ms - throttle camera commands
 
         function setupSocket() {
             socket = io();
@@ -465,9 +467,53 @@
             }
             const leftStickX = gp.axes[0];
             const leftStickY = gp.axes[1];
+            const rightStickX = gp.axes[2] || 0;
+            const rightStickY = gp.axes[3] || 0;
+            
+            // L2 and R2 buttons (usually buttons[6] and buttons[7], or can be analog)
+            const l2Button = gp.buttons[6] ? gp.buttons[6].value : 0;
+            const r2Button = gp.buttons[7] ? gp.buttons[7].value : 0;
+            
             const deadzone = 0.20;
             let yInput = Math.abs(leftStickY) > deadzone ? leftStickY * 100 : 0;
             let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0; // xInput in range [-1,1]
+            
+            // Handle L2/R2 steering
+            let steeringInput = 0;
+            if (l2Button > 0.1) {
+                steeringInput = -l2Button; // L2 = steer left
+            } else if (r2Button > 0.1) {
+                steeringInput = r2Button; // R2 = steer right
+            }
+            
+            // Apply steering to xInput if triggers are pressed
+            if (Math.abs(steeringInput) > 0.1) {
+                xInput = steeringInput;
+            }
+            
+            // Handle camera movement with right joystick
+            const cameraDeadzone = 0.15;
+            const rightStickXAbs = Math.abs(rightStickX);
+            const rightStickYAbs = Math.abs(rightStickY);
+            let panDelta = 0;
+            let tiltDelta = 0;
+            
+            if (rightStickXAbs > cameraDeadzone) {
+                panDelta = rightStickX; // Right stick X = pan (horizontal)
+            }
+            if (rightStickYAbs > cameraDeadzone) {
+                tiltDelta = -rightStickY; // Right stick Y = tilt (vertical, inverted)
+            }
+            
+            // Send camera commands if right joystick is moved (throttled)
+            const now = Date.now();
+            if ((panDelta !== 0 || tiltDelta !== 0) && (now - lastCameraCommandTime) >= CAMERA_COMMAND_INTERVAL) {
+                if (wsConnected) {
+                    socket.emit('camera_command', { pan: panDelta, tilt: tiltDelta });
+                    lastCameraCommandTime = now;
+                }
+            }
+            
             if (yInput === 0 && xInput === 0) {
                 if (lastGamepadActive) {
                     if (!Object.values(keyState).some(s => s)) {
@@ -475,7 +521,7 @@
                     }
                     lastGamepadActive = false;
                 }
-                return false;
+                return true; // Still return true if camera is being controlled
             }
             lastGamepadActive = true;
             let motorA_gp, motorB_gp;
@@ -494,7 +540,9 @@
                 motorB_gp = -xInput * 100;
             }
             sendMotorCommandWS(motorA_gp, motorB_gp);
-            gamepadInfoEl.textContent = `Gamepad Active | LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)} | Motors A:${lastSentCmd.a} B:${lastSentCmd.b}`;
+            const steeringInfo = steeringInput !== 0 ? ` L2:${l2Button.toFixed(2)} R2:${r2Button.toFixed(2)}` : '';
+            const cameraInfo = (panDelta !== 0 || tiltDelta !== 0) ? ` | Camera RX:${rightStickX.toFixed(2)} RY:${rightStickY.toFixed(2)}` : '';
+            gamepadInfoEl.textContent = `Gamepad Active | LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)}${steeringInfo} | Motors A:${lastSentCmd.a} B:${lastSentCmd.b}${cameraInfo}`;
             return true;
         }
         function gamepadLoop() {

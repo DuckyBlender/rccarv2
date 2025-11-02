@@ -22,6 +22,8 @@ AIN2 = 2
 STBY = 4
 BIN1 = 20
 BIN2 = 21
+SERVO1_PIN = 26  # Camera servo 1 (horizontal/pan)
+SERVO2_PIN = 6   # Camera servo 2 (vertical/tilt)
 
 # Setup GPIO
 GPIO.setmode(GPIO.BCM)
@@ -32,12 +34,36 @@ GPIO.setup(AIN2, GPIO.OUT)
 GPIO.setup(STBY, GPIO.OUT)
 GPIO.setup(BIN1, GPIO.OUT)
 GPIO.setup(BIN2, GPIO.OUT)
+GPIO.setup(SERVO1_PIN, GPIO.OUT)
+GPIO.setup(SERVO2_PIN, GPIO.OUT)
 
 # Initialize PWM
 pwmA = GPIO.PWM(PWMA, 100)
 pwmB = GPIO.PWM(PWMB, 100)
 pwmA.start(0)
 pwmB.start(0)
+
+# Initialize servo PWM (50Hz for servos)
+servo1 = GPIO.PWM(SERVO1_PIN, 50)
+servo2 = GPIO.PWM(SERVO2_PIN, 50)
+servo1.start(0)
+servo2.start(0)
+
+# Servo position tracking (0-180 degrees, start at 90 = center)
+servo1_position = 90
+servo2_position = 90
+
+# Set servos to center position (7.5% duty cycle = 90 degrees)
+def set_servo_angle(pwm, angle):
+    """Set servo angle (0-180 degrees) and maintain position with continuous PWM"""
+    angle = max(0, min(180, angle))
+    duty_cycle = 2.5 + (angle / 180.0) * 10.0  # 2.5% to 12.5%
+    pwm.ChangeDutyCycle(duty_cycle)
+
+set_servo_angle(servo1, servo1_position)
+set_servo_angle(servo2, servo2_position)
+time.sleep(0.5)  # Allow servos to move to center
+# Keep PWM running to maintain position
 
 GPIO.output(STBY, GPIO.LOW)  # Initially in standby
 
@@ -92,6 +118,29 @@ def handle_stop_command():
     status['state'] = 'Stopped'
     status['speed'] = 'A=0 B=0'
     emit('motor_status', status)
+
+@socketio.on('camera_command')
+def handle_camera_command(data):
+    """Handle relative camera movement commands"""
+    global servo1_position, servo2_position
+    try:
+        pan_delta = float(data.get('pan', 0))  # Horizontal movement
+        tilt_delta = float(data.get('tilt', 0))  # Vertical movement
+    except (ValueError, TypeError):
+        return
+    
+    # Update positions with very slow movement (small increments)
+    CAMERA_SPEED = 0.2  # Degrees per update - very slow
+    servo1_position += pan_delta * CAMERA_SPEED
+    servo2_position += tilt_delta * CAMERA_SPEED
+    
+    # Clamp to 0-180 degree range
+    servo1_position = max(0, min(180, servo1_position))
+    servo2_position = max(0, min(180, servo2_position))
+    
+    # Set servo positions and maintain with continuous PWM
+    set_servo_angle(servo1, servo1_position)
+    set_servo_angle(servo2, servo2_position)
 
 @app.route('/status')
 def get_status():
