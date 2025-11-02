@@ -169,15 +169,16 @@ def handle_camera_command(data):
     try:
         pan_delta = float(data.get('pan', 0))
         tilt_delta = float(data.get('tilt', 0))
+        camera_speed = float(data.get('speed', 5.0))
     except (ValueError, TypeError) as e:
         return
     
     if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
         return
     
-    CAMERA_SPEED = 5.0
-    servo1_position -= tilt_delta * CAMERA_SPEED
-    servo2_position -= pan_delta * CAMERA_SPEED
+    camera_speed = max(2.0, min(10.0, camera_speed))
+    servo1_position -= tilt_delta * camera_speed
+    servo2_position -= pan_delta * camera_speed
     
     servo1_position = max(0, min(180, servo1_position))
     servo2_position = max(0, min(180, servo2_position))
