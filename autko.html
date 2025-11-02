@@ -573,8 +573,20 @@
             }
             
             const deadzone = 0.20;
-            let yInput = Math.abs(leftStickY) > deadzone ? leftStickY * 100 : 0;
-            let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0; // xInput in range [-1,1]
+            const maxInputThreshold = 0.90;
+            
+            let yInput = 0;
+            let xInput = 0;
+            
+            if (Math.abs(leftStickY) > deadzone) {
+                const normalizedY = leftStickY / maxInputThreshold;
+                yInput = Math.max(-100, Math.min(100, normalizedY * 100));
+            }
+            
+            if (Math.abs(leftStickX) > deadzone) {
+                const normalizedX = leftStickX / maxInputThreshold;
+                xInput = Math.max(-1, Math.min(1, normalizedX));
+            }
             
             // D-pad overrides joystick for movement
             if (dpadUp) yInput = -100;
@@ -582,12 +594,12 @@
             if (dpadLeft) xInput = -1;
             else if (dpadRight) xInput = 1;
             
-            // Handle L2/R2 steering
+            // Handle L2/R2 steering (not normalized - triggers can reach full range)
             let steeringInput = 0;
             if (l2Button > 0.1) {
-                steeringInput = -l2Button; // L2 = steer left
+                steeringInput = -l2Button;
             } else if (r2Button > 0.1) {
-                steeringInput = r2Button; // R2 = steer right
+                steeringInput = r2Button;
             }
             
             // Apply steering to xInput if triggers are pressed
@@ -607,16 +619,19 @@
             }
             
             const cameraDeadzone = 0.20;
+            const cameraMaxThreshold = 0.90;
             const rightStickXAbs = Math.abs(actualRightStickX);
             const rightStickYAbs = Math.abs(actualRightStickY);
             let panDelta = 0;
             let tiltDelta = 0;
             
             if (rightStickXAbs > cameraDeadzone) {
-                panDelta = actualRightStickX;
+                const normalizedX = actualRightStickX / cameraMaxThreshold;
+                panDelta = Math.max(-1, Math.min(1, normalizedX));
             }
             if (rightStickYAbs > cameraDeadzone) {
-                tiltDelta = -actualRightStickY;
+                const normalizedY = actualRightStickY / cameraMaxThreshold;
+                tiltDelta = Math.max(-1, Math.min(1, -normalizedY));
             }
             
             // Send camera commands if joystick is moved (throttled)
@@ -651,9 +666,12 @@
                 motorA_gp = speed * leftScale;
                 motorB_gp = speed * rightScale;
             } else {
-                // Pivot in place
-                motorA_gp = xInput * 100;
-                motorB_gp = -xInput * 100;
+                // Pivot in place - reduced sensitivity but still 100% at max stick
+                const pivotSensitivity = 0.6;
+                const absX = Math.abs(xInput);
+                const sensitivityMultiplier = pivotSensitivity + (1 - pivotSensitivity) * absX;
+                motorA_gp = xInput * 100 * sensitivityMultiplier;
+                motorB_gp = -xInput * 100 * sensitivityMultiplier;
             }
             sendMotorCommandWS(motorA_gp, motorB_gp);
             let debugInfo = `LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)}`;
