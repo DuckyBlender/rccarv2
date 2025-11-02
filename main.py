@@ -55,7 +55,7 @@ else:
 
 # Servo Controllers
 servo1 = servo2 = None
-servo1_position = servo2_position = 110
+servo1_position = servo2_position = 70
 
 try:
     if factory:
@@ -66,7 +66,7 @@ try:
             min_pulse_width=0.0005,
             max_pulse_width=0.0024,
             pin_factory=factory,
-            initial_angle=110,
+            initial_angle=70,
         )
         servo2 = AngularServo(
             SERVO2_PIN,
@@ -75,7 +75,7 @@ try:
             min_pulse_width=0.0005,
             max_pulse_width=0.0024,
             pin_factory=factory,
-            initial_angle=110,
+            initial_angle=70,
         )
     else:
         servo1 = AngularServo(
@@ -84,7 +84,7 @@ try:
             max_angle=180,
             min_pulse_width=0.0005,
             max_pulse_width=0.0024,
-            initial_angle=110,
+            initial_angle=70,
         )
         servo2 = AngularServo(
             SERVO2_PIN,
@@ -92,7 +92,7 @@ try:
             max_angle=180,
             min_pulse_width=0.0005,
             max_pulse_width=0.0024,
-            initial_angle=110,
+            initial_angle=70,
         )
     time.sleep(0.3)
 except Exception as e:
@@ -201,11 +201,11 @@ def handle_camera(data):
         last_camera_time = now
 
     if data.get("center"):
-        servo1_position = servo2_position = 110
+        servo1_position = servo2_position = 70
         if servo1 and servo2:
             try:
-                servo1.angle = 110
-                servo2.angle = 110
+                servo1.angle = 70
+                servo2.angle = 70
             except Exception:
                 pass
         return
