@@ -10,6 +10,7 @@ from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 import re
 from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
+from gpiozero.pins.pigpio import PiGPIOFactory
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -25,18 +26,21 @@ BIN2 = 21
 SERVO1_PIN = 26  # Camera servo 1 (horizontal/pan)
 SERVO2_PIN = 6   # Camera servo 2 (vertical/tilt)
 
-# Initialize motor control devices
-pwmA = PWMOutputDevice(PWMA, frequency=100)
-pwmB = PWMOutputDevice(PWMB, frequency=100)
-ain1 = OutputDevice(AIN1)
-ain2 = OutputDevice(AIN2)
-bin1 = OutputDevice(BIN1)
-bin2 = OutputDevice(BIN2)
-stby = OutputDevice(STBY)
+# Initialize GPIO Zero with PiGPIOFactory (for all devices to avoid jitter)
+factory = PiGPIOFactory()
 
-# Initialize servos using GPIO Zero
-servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
-servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
+# Initialize motor control devices
+pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=100)
+pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=100)
+ain1 = OutputDevice(AIN1, pin_factory=factory)
+ain2 = OutputDevice(AIN2, pin_factory=factory)
+bin1 = OutputDevice(BIN1, pin_factory=factory)
+bin2 = OutputDevice(BIN2, pin_factory=factory)
+stby = OutputDevice(STBY, pin_factory=factory)
+
+# Initialize servos using GPIO Zero with PiGPIOFactory to avoid jitter
+servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
+servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
 
 # Servo position tracking (0-180 degrees, start at 90 = center)
 servo1_position = 90
