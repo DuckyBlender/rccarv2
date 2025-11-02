@@ -56,15 +56,37 @@ else:
 # Initialize servos using GPIO Zero with PiGPIOFactory to avoid jitter
 try:
     if factory:
-        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
-        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, pin_factory=factory)
+        # Try with different pulse widths - some servos need different ranges
+        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, 
+                             min_pulse_width=0.0005, max_pulse_width=0.0024, 
+                             pin_factory=factory, initial_angle=90)
+        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, 
+                             min_pulse_width=0.0005, max_pulse_width=0.0024, 
+                             pin_factory=factory, initial_angle=90)
         print(f"Servos initialized with PiGPIOFactory on pins {SERVO1_PIN} and {SERVO2_PIN}")
+        # Test movement immediately
+        print("Testing servo movement...")
+        servo1.angle = 0
+        time.sleep(0.5)
+        servo1.angle = 180
+        time.sleep(0.5)
+        servo1.angle = 90
+        time.sleep(0.5)
+        servo2.angle = 0
+        time.sleep(0.5)
+        servo2.angle = 180
+        time.sleep(0.5)
+        servo2.angle = 90
+        time.sleep(0.5)
+        print("Servo test complete")
     else:
-        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
-        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
+        servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, initial_angle=90)
+        servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024, initial_angle=90)
         print(f"Servos initialized with default factory on pins {SERVO1_PIN} and {SERVO2_PIN}")
 except Exception as e:
     print(f"Error initializing servos: {e}")
+    import traceback
+    traceback.print_exc()
     servo1 = None
     servo2 = None
 
@@ -154,9 +176,12 @@ def handle_camera_command(data):
             servo2_position = 90
             servo1.angle = 90
             servo2.angle = 90
+            time.sleep(0.3)  # Give servos time to move to center
             print(f"Camera centered to {servo1_position} degrees")
         except Exception as e:
             print(f"Error centering camera: {e}")
+            import traceback
+            traceback.print_exc()
         return
     
     try:
@@ -181,15 +206,46 @@ def handle_camera_command(data):
     
     # Set servo positions using GPIO Zero (handles PWM properly)
     try:
+        # Direct assignment - GPIO Zero handles the PWM
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-        print(f"Camera moved to pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
+        # Only print every 10th update to reduce spam
+        if int(servo1_position * 10) % 10 == 0 or int(servo2_position * 10) % 10 == 0:
+            print(f"Camera moved to pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
     except Exception as e:
         print(f"Error moving camera: {e}")
+        import traceback
+        traceback.print_exc()
 
 @app.route('/status')
 def get_status():
     return status
+
+@app.route('/test_servo/<int:pin>/<float:angle>')
+def test_servo(pin, angle):
+    """Test route to manually test servo movement"""
+    try:
+        if pin == SERVO1_PIN:
+            servo = servo1
+        elif pin == SERVO2_PIN:
+            servo = servo2
+        else:
+            return {'error': f'Invalid pin {pin}. Use {SERVO1_PIN} or {SERVO2_PIN}'}, 400
+        
+        if not servo:
+            return {'error': 'Servo not initialized'}, 500
+        
+        angle = max(0, min(180, float(angle)))
+        print(f"Testing servo on pin {pin} to {angle} degrees")
+        servo.detach()
+        time.sleep(0.01)
+        servo.angle = angle
+        time.sleep(0.5)  # Give it time to move
+        return {'success': True, 'pin': pin, 'angle': angle, 'current_angle': servo.angle}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}, 500
 
 @app.route('/')
 def index():
