@@ -51,10 +51,16 @@
         .controls-row {
             display: flex;
             gap: 10px;
+            margin-bottom: 10px;
         }
         
         .controls-row .control-group {
             flex: 1;
+            margin-bottom: 0;
+        }
+        
+        .controls-column > .controls-row + .control-group {
+            margin-top: 0;
         }
 
         .panel {
@@ -76,10 +82,6 @@
             padding: 12px;
             border-radius: 6px;
             margin-bottom: 10px;
-        }
-        
-        .controls-column .control-group:last-child {
-            margin-bottom: 0;
         }
 
         .control-group h3 {
