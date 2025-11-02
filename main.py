@@ -1,9 +1,6 @@
-from flask import Flask, send_file, Response, request
+from flask import Flask, send_file, Response
 from flask_socketio import SocketIO, emit
-import eventlet
-
-eventlet.monkey_patch()
-
+import threading
 import time
 import io
 import piexif
@@ -18,7 +15,7 @@ app.config["SECRET_KEY"] = "rccar_secret"
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="eventlet",
+    async_mode="threading",
     ping_timeout=10,
     ping_interval=5,
     logger=False,
@@ -38,7 +35,7 @@ try:
 except Exception:
     factory = None
 
-# Motor Controllers
+# Motor Controllers with higher PWM frequency for smoother control
 if factory:
     pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=1000)
     pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=1000)
@@ -97,13 +94,15 @@ try:
             max_pulse_width=0.0024,
             initial_angle=90,
         )
-    eventlet.sleep(0.3)
+    time.sleep(0.3)
 except Exception as e:
     print(f"Servo init error: {e}")
 
 stby.off()
 
-# Rate limiting
+# Rate limiting with locks for thread safety
+motor_lock = threading.Lock()
+camera_lock = threading.Lock()
 last_motor_time = 0
 last_camera_time = 0
 MOTOR_MIN_INTERVAL = 0.02  # 50Hz max
@@ -114,7 +113,7 @@ current_motor = {"a": 0, "b": 0}
 
 
 def set_motor(a, b):
-    """Set motor speeds with direction control"""
+    """Set motor speeds with direction control - optimized for speed"""
     a = max(-100, min(100, a))
     b = max(-100, min(100, b))
 
@@ -172,10 +171,11 @@ def handle_connect():
 def handle_motor_command(data):
     global last_motor_time
 
-    now = time.time()
-    if now - last_motor_time < MOTOR_MIN_INTERVAL:
-        return
-    last_motor_time = now
+    with motor_lock:
+        now = time.time()
+        if now - last_motor_time < MOTOR_MIN_INTERVAL:
+            return
+        last_motor_time = now
 
     try:
         a = int(data.get("a", 0))
@@ -194,10 +194,11 @@ def handle_stop():
 def handle_camera(data):
     global last_camera_time, servo1_position, servo2_position
 
-    now = time.time()
-    if now - last_camera_time < CAMERA_MIN_INTERVAL:
-        return
-    last_camera_time = now
+    with camera_lock:
+        now = time.time()
+        if now - last_camera_time < CAMERA_MIN_INTERVAL:
+            return
+        last_camera_time = now
 
     if data.get("center"):
         servo1_position = servo2_position = 90
@@ -248,16 +249,12 @@ rotation_header = bytes.fromhex("ffe1") + exif_len.to_bytes(2, "big") + exif_byt
 class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
-        self.condition = eventlet.semaphore.Semaphore(0)
-        self.has_frame = False
+        self.condition = threading.Condition()
 
     def write(self, buf):
-        self.frame = buf[:2] + rotation_header + buf[2:]
-        self.has_frame = True
-        try:
-            self.condition.release()
-        except ValueError:
-            pass
+        with self.condition:
+            self.frame = buf[:2] + rotation_header + buf[2:]
+            self.condition.notify_all()
 
 
 picam2 = None
@@ -272,15 +269,18 @@ def start_camera():
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 
 
-eventlet.spawn(start_camera)
+# Start camera in background thread
+camera_thread = threading.Thread(target=start_camera, daemon=True)
+camera_thread.start()
 
 
 @app.route("/mjpeg")
 def mjpeg_stream():
     def generate():
         while True:
-            output.condition.acquire()
-            frame = output.frame
+            with output.condition:
+                output.condition.wait()
+                frame = output.frame
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n"
@@ -290,11 +290,13 @@ def mjpeg_stream():
                 + frame
                 + b"\r\n"
             )
-            eventlet.sleep(0.033)  # ~30 FPS
+            time.sleep(0.033)  # ~30 FPS
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 if __name__ == "__main__":
     print("Starting RC Car Server on port 25565...")
-    socketio.run(app, host="0.0.0.0", port=25565, debug=False)
+    socketio.run(
+        app, host="0.0.0.0", port=25565, debug=False, allow_unsafe_werkzeug=True
+    )
