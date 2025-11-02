@@ -420,17 +420,21 @@
             }
 
             // Camera Control
-            function sendCameraCommand(pan, tilt) {
+            function sendCameraCommand(pan, tilt, absolute = false) {
                 if (!wsConnected) return;
                 const now = Date.now();
                 if (now - lastCameraTime < CAMERA_INTERVAL) return;
 
                 lastCameraTime = now;
-                socket.emit("camera_command", {
+                const cmd = {
                     pan,
                     tilt,
                     speed: currentCameraSpeed,
-                });
+                };
+                if (absolute) {
+                    cmd.absolute = true;
+                }
+                socket.emit("camera_command", cmd);
             }
 
             function startCameraControl(direction) {
@@ -732,13 +736,15 @@
                 else if (r2 > 0.1) steering = r2;
                 if (Math.abs(steering) > 0.1) xInput = steering;
 
-                // Camera with right stick
+                // Camera with right stick (absolute positioning)
                 const camDeadzone = 0.2;
                 let pan = Math.abs(rightX) > camDeadzone ? rightX : 0;
                 let tilt = Math.abs(rightY) > camDeadzone ? -rightY : 0;
 
-                if ((pan !== 0 || tilt !== 0) && wsConnected) {
-                    sendCameraCommand(pan, tilt);
+                // Always send camera command with absolute positioning
+                // When centered (0,0), camera returns to default position
+                if (wsConnected) {
+                    sendCameraCommand(pan, tilt, true);
                 }
 
                 // Motor control

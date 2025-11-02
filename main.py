@@ -4,11 +4,45 @@ import threading
 import time
 import io
 import piexif
+import logging
+from werkzeug.serving import WSGIRequestHandler
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
+
+
+# Custom logging to filter out TLS handshake spam
+class TLSFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        # Filter out TLS handshake attempts (they start with \x16\x03 or \x15)
+        if "Bad request version" in msg or "Bad HTTP/0.9 request type" in msg:
+            if "\\x16\\x03" in msg or "\\x15" in msg:
+                return False
+        return True
+
+
+class CustomRequestHandler(WSGIRequestHandler):
+    def log_request(self, code="-", size="-"):
+        # Only log successful requests and real errors (not TLS noise)
+        if isinstance(code, int) and code >= 400:
+            return  # Skip error logging, we'll handle it in log_error
+        super().log_request(code, size)
+
+    def log_error(self, format, *args):
+        # Filter TLS errors
+        if args and len(args) > 0:
+            msg = str(args[0]) if args else ""
+            if "\\x16\\x03" in msg or "\\x15" in msg or "Bad request version" in msg:
+                return
+        super().log_error(format, *args)
+
+
+# Configure logging
+log = logging.getLogger("werkzeug")
+log.addFilter(TLSFilter())
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "rccar_secret"
@@ -56,6 +90,7 @@ else:
 # Servo Controllers
 servo1 = servo2 = None
 servo1_position = servo2_position = 70
+servo1_default = servo2_default = 70  # Store default positions
 
 try:
     if factory:
@@ -162,6 +197,37 @@ def set_camera(pan, tilt, speed):
         pass
 
 
+def set_camera_absolute(pan, tilt):
+    """Set camera to absolute position based on joystick input (-1 to 1)"""
+    global servo1_position, servo2_position
+
+    if not servo1 or not servo2:
+        return
+
+    # Map -1 to 1 range to 0-180 degrees
+    # pan: -1 (left) = 0°, 0 (center) = default, 1 (right) = 180°
+    # tilt: -1 (down) = 0°, 0 (center) = default, 1 (up) = 180°
+
+    if abs(pan) < 0.01 and abs(tilt) < 0.01:
+        # Return to default position when centered
+        servo2_position = servo2_default
+        servo1_position = servo1_default
+    else:
+        # Map joystick to full servo range
+        servo2_position = int(90 + pan * 90)  # pan controls servo2
+        servo1_position = int(90 - tilt * 90)  # tilt controls servo1 (inverted)
+
+        # Clamp to valid range
+        servo2_position = max(0, min(180, servo2_position))
+        servo1_position = max(0, min(180, servo1_position))
+
+    try:
+        servo1.angle = servo1_position
+        servo2.angle = servo2_position
+    except Exception:
+        pass
+
+
 @socketio.on("connect")
 def handle_connect():
     emit("motor_status", {"state": "Connected"})
@@ -201,22 +267,29 @@ def handle_camera(data):
         last_camera_time = now
 
     if data.get("center"):
-        servo1_position = servo2_position = 70
+        servo1_position = servo2_position = servo1_default
         if servo1 and servo2:
             try:
-                servo1.angle = 70
-                servo2.angle = 70
+                servo1.angle = servo1_default
+                servo2.angle = servo2_default
             except Exception:
                 pass
         return
 
     try:
-        pan = float(data.get("pan", 0))
-        tilt = float(data.get("tilt", 0))
-        speed = max(2.0, min(10.0, float(data.get("speed", 5.0))))
+        # Check if this is absolute positioning (from gamepad)
+        if data.get("absolute"):
+            pan = float(data.get("pan", 0))
+            tilt = float(data.get("tilt", 0))
+            set_camera_absolute(pan, tilt)
+        else:
+            # Relative positioning (from keyboard/buttons)
+            pan = float(data.get("pan", 0))
+            tilt = float(data.get("tilt", 0))
+            speed = max(2.0, min(10.0, float(data.get("speed", 5.0))))
 
-        if abs(pan) > 0.01 or abs(tilt) > 0.01:
-            set_camera(pan, tilt, speed)
+            if abs(pan) > 0.01 or abs(tilt) > 0.01:
+                set_camera(pan, tilt, speed)
     except (ValueError, TypeError):
         pass
 
@@ -298,5 +371,10 @@ def mjpeg_stream():
 if __name__ == "__main__":
     print("Starting RC Car Server on port 25565...")
     socketio.run(
-        app, host="0.0.0.0", port=25565, debug=False, allow_unsafe_werkzeug=True
+        app,
+        host="0.0.0.0",
+        port=25565,
+        debug=False,
+        allow_unsafe_werkzeug=True,
+        log_output=False,
     )
