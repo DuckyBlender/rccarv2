@@ -130,7 +130,7 @@ def handle_camera_command(data):
         return
     
     # Update positions with very slow movement (small increments)
-    CAMERA_SPEED = 0.2  # Degrees per update - very slow
+    CAMERA_SPEED = 0.03  # Degrees per update - very slow to prevent over-correction
     servo1_position += pan_delta * CAMERA_SPEED
     servo2_position += tilt_delta * CAMERA_SPEED
     

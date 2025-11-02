@@ -285,7 +285,7 @@
         let socket = null;
         const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
         let lastCameraCommandTime = 0;
-        const CAMERA_COMMAND_INTERVAL = 50; // ms - throttle camera commands
+        const CAMERA_COMMAND_INTERVAL = 100; // ms - throttle camera commands to prevent over-correction
 
         function setupSocket() {
             socket = io();
