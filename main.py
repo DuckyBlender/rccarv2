@@ -1,68 +1,67 @@
-from flask import Flask, make_response, send_file, Response, jsonify, request
+from flask import Flask, send_file, Response, request
 from flask_socketio import SocketIO, emit
-import threading
+import eventlet
+
+eventlet.monkey_patch()
+
 import time
-import cv2
 import io
 import piexif
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
-import re
 from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = "rccar_secret"
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="threading",
-    logger=True,
-    engineio_logger=True,
+    async_mode="eventlet",
+    ping_timeout=10,
+    ping_interval=5,
+    logger=False,
+    engineio_logger=False,
 )
 
-# Define GPIO pins
-PWMA = 12
-PWMB = 13
-AIN1 = 3
-AIN2 = 2
+# GPIO Configuration
+PWMA, PWMB = 12, 13
+AIN1, AIN2 = 3, 2
+BIN1, BIN2 = 20, 21
 STBY = 4
-BIN1 = 20
-BIN2 = 21
-SERVO1_PIN = 26
-SERVO2_PIN = 6
+SERVO1_PIN, SERVO2_PIN = 26, 6
 
-# Initialize GPIO Zero with PiGPIOFactory (for all devices to avoid jitter)
+# Initialize PiGPIO Factory
 try:
     factory = PiGPIOFactory()
-    print("Using PiGPIOFactory for hardware PWM")
-except Exception as e:
-    print(f"Warning: PiGPIOFactory failed ({e}). Using default factory.")
-    print("Make sure pigpiod service is running: sudo systemctl start pigpiod")
+except Exception:
     factory = None
 
-# Initialize motor control devices
+# Motor Controllers
 if factory:
-    pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=100)
-    pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=100)
+    pwmA = PWMOutputDevice(PWMA, pin_factory=factory, frequency=1000)
+    pwmB = PWMOutputDevice(PWMB, pin_factory=factory, frequency=1000)
     ain1 = OutputDevice(AIN1, pin_factory=factory)
     ain2 = OutputDevice(AIN2, pin_factory=factory)
     bin1 = OutputDevice(BIN1, pin_factory=factory)
     bin2 = OutputDevice(BIN2, pin_factory=factory)
     stby = OutputDevice(STBY, pin_factory=factory)
 else:
-    pwmA = PWMOutputDevice(PWMA, frequency=100)
-    pwmB = PWMOutputDevice(PWMB, frequency=100)
+    pwmA = PWMOutputDevice(PWMA, frequency=1000)
+    pwmB = PWMOutputDevice(PWMB, frequency=1000)
     ain1 = OutputDevice(AIN1)
     ain2 = OutputDevice(AIN2)
     bin1 = OutputDevice(BIN1)
     bin2 = OutputDevice(BIN2)
     stby = OutputDevice(STBY)
 
-# Initialize servos using GPIO Zero with PiGPIOFactory to avoid jitter
+# Servo Controllers
+servo1 = servo2 = None
+servo1_position = servo2_position = 90
+
 try:
     if factory:
-        # Try with different pulse widths - some servos need different ranges
         servo1 = AngularServo(
             SERVO1_PIN,
             min_angle=0,
@@ -80,9 +79,6 @@ try:
             max_pulse_width=0.0024,
             pin_factory=factory,
             initial_angle=90,
-        )
-        print(
-            f"Servos initialized with PiGPIOFactory on pins {SERVO1_PIN} and {SERVO2_PIN}"
         )
     else:
         servo1 = AngularServo(
@@ -101,67 +97,30 @@ try:
             max_pulse_width=0.0024,
             initial_angle=90,
         )
-        print(
-            f"Servos initialized with default factory on pins {SERVO1_PIN} and {SERVO2_PIN}"
-        )
+    eventlet.sleep(0.3)
 except Exception as e:
-    print(f"Error initializing servos: {e}")
-    import traceback
+    print(f"Servo init error: {e}")
 
-    traceback.print_exc()
-    servo1 = None
-    servo2 = None
+stby.off()
 
-# Servo position tracking (0-180 degrees, start at 90 = center)
-servo1_position = 90
-servo2_position = 90
+# Rate limiting
+last_motor_time = 0
+last_camera_time = 0
+MOTOR_MIN_INTERVAL = 0.02  # 50Hz max
+CAMERA_MIN_INTERVAL = 0.03  # 33Hz max
 
-# Set servos to center position and keep them active
-if servo1 and servo2:
-    try:
-        # Set initial position
-        servo1.angle = servo1_position
-        servo2.angle = servo2_position
-        print(f"Servos set to center position: {servo1_position} degrees")
-        time.sleep(0.5)  # Allow servos to move to center
-        # Servos should remain active with GPIO Zero - no need to detach
-    except Exception as e:
-        print(f"Error setting servo center position: {e}")
-        import traceback
-
-        traceback.print_exc()
-else:
-    print("Warning: Servos not initialized!")
-
-stby.off()  # Initially in standby
-
-status = {"state": "Stopped", "speed": 0}
+# Current state
+current_motor = {"a": 0, "b": 0}
 
 
-@socketio.on("connect")
-def handle_connect():
-    print(f"✅ Client connected: {request.sid}")
-    emit("motor_status", {"state": "Connected to server"})
-
-
-@socketio.on("disconnect")
-def handle_disconnect():
-    print(f"❌ Client disconnected: {request.sid}")
-
-
-@socketio.on("motor_command")
-def handle_motor_command(data):
-    print(f"📨 Motor command received: {data}")
-    try:
-        a = int(data.get("a", 0))
-        b = int(data.get("b", 0))
-    except (ValueError, TypeError):
-        emit("motor_status", {"error": "Invalid motor values"})
-        return
+def set_motor(a, b):
+    """Set motor speeds with direction control"""
     a = max(-100, min(100, a))
     b = max(-100, min(100, b))
+
     pwmA.value = abs(a) / 100.0
     pwmB.value = abs(b) / 100.0
+
     if a > 0:
         ain1.on()
         ain2.off()
@@ -171,6 +130,7 @@ def handle_motor_command(data):
     else:
         ain1.off()
         ain2.off()
+
     if b > 0:
         bin1.on()
         bin2.off()
@@ -180,73 +140,94 @@ def handle_motor_command(data):
     else:
         bin1.off()
         bin2.off()
+
     stby.on() if (a != 0 or b != 0) else stby.off()
-    status["state"] = f"{abs(a)}% {abs(b)}%" if (a != 0 or b != 0) else "Stopped"
-    emit("motor_status", status)
+    current_motor["a"] = a
+    current_motor["b"] = b
 
 
-@socketio.on("stop_command")
-def handle_stop_command():
-    print(f"🛑 Stop command received")
-    pwmA.value = 0
-    pwmB.value = 0
-    ain1.off()
-    ain2.off()
-    bin1.off()
-    bin2.off()
-    stby.off()
-    status["state"] = "Stopped"
-    status["speed"] = "A=0 B=0"
-    emit("motor_status", status)
-
-
-@socketio.on("camera_command")
-def handle_camera_command(data):
-    print(f"📷 Camera command received: {data}")
+def set_camera(pan, tilt, speed):
+    """Update camera position with deltas"""
     global servo1_position, servo2_position
 
     if not servo1 or not servo2:
         return
 
-    if data.get("center", False):
-        try:
-            servo1_position = 90
-            servo2_position = 90
-            servo1.angle = 90
-            servo2.angle = 90
-            time.sleep(0.3)
-            print(f"Camera centered")
-        except Exception as e:
-            print(f"Error centering camera: {e}")
-        return
-
-    try:
-        pan_delta = float(data.get("pan", 0))
-        tilt_delta = float(data.get("tilt", 0))
-        camera_speed = float(data.get("speed", 5.0))
-    except (ValueError, TypeError) as e:
-        return
-
-    if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
-        return
-
-    camera_speed = max(2.0, min(10.0, camera_speed))
-    servo1_position -= tilt_delta * camera_speed
-    servo2_position -= pan_delta * camera_speed
-
-    servo1_position = max(0, min(180, servo1_position))
-    servo2_position = max(0, min(180, servo2_position))
+    servo1_position = max(0, min(180, servo1_position - tilt * speed))
+    servo2_position = max(0, min(180, servo2_position - pan * speed))
 
     try:
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-    except Exception as e:
-        print(f"Error moving camera: {e}")
+    except Exception:
+        pass
+
+
+@socketio.on("connect")
+def handle_connect():
+    emit("motor_status", {"state": "Connected"})
+
+
+@socketio.on("motor_command")
+def handle_motor_command(data):
+    global last_motor_time
+
+    now = time.time()
+    if now - last_motor_time < MOTOR_MIN_INTERVAL:
+        return
+    last_motor_time = now
+
+    try:
+        a = int(data.get("a", 0))
+        b = int(data.get("b", 0))
+        set_motor(a, b)
+    except (ValueError, TypeError):
+        pass
+
+
+@socketio.on("stop_command")
+def handle_stop():
+    set_motor(0, 0)
+
+
+@socketio.on("camera_command")
+def handle_camera(data):
+    global last_camera_time, servo1_position, servo2_position
+
+    now = time.time()
+    if now - last_camera_time < CAMERA_MIN_INTERVAL:
+        return
+    last_camera_time = now
+
+    if data.get("center"):
+        servo1_position = servo2_position = 90
+        if servo1 and servo2:
+            try:
+                servo1.angle = 90
+                servo2.angle = 90
+            except Exception:
+                pass
+        return
+
+    try:
+        pan = float(data.get("pan", 0))
+        tilt = float(data.get("tilt", 0))
+        speed = max(2.0, min(10.0, float(data.get("speed", 5.0))))
+
+        if abs(pan) > 0.01 or abs(tilt) > 0.01:
+            set_camera(pan, tilt, speed)
+    except (ValueError, TypeError):
+        pass
 
 
 @app.route("/status")
 def get_status():
-    return status
+    return {
+        "state": f"A:{current_motor['a']} B:{current_motor['b']}"
+        if any(current_motor.values())
+        else "Stopped",
+        "speed": current_motor,
+    }
 
 
 @app.route("/")
@@ -254,12 +235,11 @@ def index():
     return send_file("autko.html")
 
 
-WIDTH = 640
-HEIGHT = 480
-
+# Camera Stream Setup
+WIDTH, HEIGHT = 640, 480
 rotation_header = bytes()
 WIDTH, HEIGHT = HEIGHT, WIDTH
-code = 3  # Rotate 180 degrees
+code = 3
 exif_bytes = piexif.dump({"0th": {piexif.ImageIFD.Orientation: code}})
 exif_len = len(exif_bytes) + 2
 rotation_header = bytes.fromhex("ffe1") + exif_len.to_bytes(2, "big") + exif_bytes
@@ -268,15 +248,18 @@ rotation_header = bytes.fromhex("ffe1") + exif_len.to_bytes(2, "big") + exif_byt
 class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
-        self.condition = threading.Condition()
+        self.condition = eventlet.semaphore.Semaphore(0)
+        self.has_frame = False
 
     def write(self, buf):
-        with self.condition:
-            self.frame = buf[:2] + rotation_header + buf[2:]
-            self.condition.notify_all()
+        self.frame = buf[:2] + rotation_header + buf[2:]
+        self.has_frame = True
+        try:
+            self.condition.release()
+        except ValueError:
+            pass
 
 
-# Global camera and output
 picam2 = None
 output = None
 
@@ -289,19 +272,15 @@ def start_camera():
     picam2.start_recording(MJPEGEncoder(), FileOutput(output))
 
 
-# Start camera in a background thread on app startup
-camera_thread = threading.Thread(target=start_camera)
-camera_thread.daemon = True
-camera_thread.start()
+eventlet.spawn(start_camera)
 
 
 @app.route("/mjpeg")
 def mjpeg_stream():
     def generate():
         while True:
-            with output.condition:
-                output.condition.wait()
-                frame = output.frame
+            output.condition.acquire()
+            frame = output.frame
             yield (
                 b"--frame\r\n"
                 b"Content-Type: image/jpeg\r\n"
@@ -311,14 +290,11 @@ def mjpeg_stream():
                 + frame
                 + b"\r\n"
             )
-            time.sleep(1 / 30)  # Limit to 30 FPS
+            eventlet.sleep(0.033)  # ~30 FPS
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 if __name__ == "__main__":
-    print("🚀 Starting Flask-SocketIO server on port 25565...")
-    print("📡 WebSocket endpoint: http://0.0.0.0:25565")
-    socketio.run(
-        app, host="0.0.0.0", port=25565, debug=False, allow_unsafe_werkzeug=True
-    )
+    print("Starting RC Car Server on port 25565...")
+    socketio.run(app, host="0.0.0.0", port=25565, debug=False)
