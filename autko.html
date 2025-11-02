@@ -498,6 +498,7 @@
             let panDelta = 0;
             let tiltDelta = 0;
             
+            // Only send commands when joystick is actually moved beyond deadzone
             if (rightStickXAbs > cameraDeadzone) {
                 panDelta = rightStickX; // Right stick X = pan (horizontal)
             }
@@ -505,7 +506,7 @@
                 tiltDelta = -rightStickY; // Right stick Y = tilt (vertical, inverted)
             }
             
-            // Send camera commands if right joystick is moved (throttled)
+            // Only send camera commands if joystick is actually moved (throttled)
             const now = Date.now();
             if ((panDelta !== 0 || tiltDelta !== 0) && (now - lastCameraCommandTime) >= CAMERA_COMMAND_INTERVAL) {
                 if (wsConnected) {

@@ -1,4 +1,3 @@
-import RPi.GPIO as GPIO
 from flask import Flask, make_response, send_file, Response, jsonify, request
 from flask_socketio import SocketIO, emit
 import threading
@@ -10,6 +9,7 @@ from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
 import re
+from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -25,47 +25,29 @@ BIN2 = 21
 SERVO1_PIN = 26  # Camera servo 1 (horizontal/pan)
 SERVO2_PIN = 6   # Camera servo 2 (vertical/tilt)
 
-# Setup GPIO
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(PWMA, GPIO.OUT)
-GPIO.setup(PWMB, GPIO.OUT)
-GPIO.setup(AIN1, GPIO.OUT)
-GPIO.setup(AIN2, GPIO.OUT)
-GPIO.setup(STBY, GPIO.OUT)
-GPIO.setup(BIN1, GPIO.OUT)
-GPIO.setup(BIN2, GPIO.OUT)
-GPIO.setup(SERVO1_PIN, GPIO.OUT)
-GPIO.setup(SERVO2_PIN, GPIO.OUT)
+# Initialize motor control devices
+pwmA = PWMOutputDevice(PWMA, frequency=100)
+pwmB = PWMOutputDevice(PWMB, frequency=100)
+ain1 = OutputDevice(AIN1)
+ain2 = OutputDevice(AIN2)
+bin1 = OutputDevice(BIN1)
+bin2 = OutputDevice(BIN2)
+stby = OutputDevice(STBY)
 
-# Initialize PWM
-pwmA = GPIO.PWM(PWMA, 100)
-pwmB = GPIO.PWM(PWMB, 100)
-pwmA.start(0)
-pwmB.start(0)
-
-# Initialize servo PWM (50Hz for servos)
-servo1 = GPIO.PWM(SERVO1_PIN, 50)
-servo2 = GPIO.PWM(SERVO2_PIN, 50)
-servo1.start(0)
-servo2.start(0)
+# Initialize servos using GPIO Zero
+servo1 = AngularServo(SERVO1_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
+servo2 = AngularServo(SERVO2_PIN, min_angle=0, max_angle=180, min_pulse_width=0.0005, max_pulse_width=0.0024)
 
 # Servo position tracking (0-180 degrees, start at 90 = center)
 servo1_position = 90
 servo2_position = 90
 
-# Set servos to center position (7.5% duty cycle = 90 degrees)
-def set_servo_angle(pwm, angle):
-    """Set servo angle (0-180 degrees) and maintain position with continuous PWM"""
-    angle = max(0, min(180, angle))
-    duty_cycle = 2.5 + (angle / 180.0) * 10.0  # 2.5% to 12.5%
-    pwm.ChangeDutyCycle(duty_cycle)
-
-set_servo_angle(servo1, servo1_position)
-set_servo_angle(servo2, servo2_position)
+# Set servos to center position
+servo1.angle = servo1_position
+servo2.angle = servo2_position
 time.sleep(0.5)  # Allow servos to move to center
-# Keep PWM running to maintain position
 
-GPIO.output(STBY, GPIO.LOW)  # Initially in standby
+stby.off()  # Initially in standby
 
 status = {'state': 'Stopped', 'speed': 0}
 
@@ -80,48 +62,48 @@ def handle_motor_command(data):
         return
     a = max(-100, min(100, a))
     b = max(-100, min(100, b))
-    pwmA.ChangeDutyCycle(abs(a))
-    pwmB.ChangeDutyCycle(abs(b))
+    pwmA.value = abs(a) / 100.0
+    pwmB.value = abs(b) / 100.0
     # Set direction based on sign
     if a > 0:
-        GPIO.output(AIN1, GPIO.HIGH)
-        GPIO.output(AIN2, GPIO.LOW)
+        ain1.on()
+        ain2.off()
     elif a < 0:
-        GPIO.output(AIN1, GPIO.LOW)
-        GPIO.output(AIN2, GPIO.HIGH)
+        ain1.off()
+        ain2.on()
     else:
-        GPIO.output(AIN1, GPIO.LOW)
-        GPIO.output(AIN2, GPIO.LOW)
+        ain1.off()
+        ain2.off()
     if b > 0:
-        GPIO.output(BIN1, GPIO.HIGH)
-        GPIO.output(BIN2, GPIO.LOW)
+        bin1.on()
+        bin2.off()
     elif b < 0:
-        GPIO.output(BIN1, GPIO.LOW)
-        GPIO.output(BIN2, GPIO.HIGH)
+        bin1.off()
+        bin2.on()
     else:
-        GPIO.output(BIN1, GPIO.LOW)
-        GPIO.output(BIN2, GPIO.LOW)
-    GPIO.output(STBY, GPIO.HIGH if (a != 0 or b != 0) else GPIO.LOW)
+        bin1.off()
+        bin2.off()
+    stby.on() if (a != 0 or b != 0) else stby.off()
     status['state'] = f"Motors: A={a} B={b}"
     status['speed'] = f"A={a} B={b}"
     emit('motor_status', status)
 
 @socketio.on('stop_command')
 def handle_stop_command():
-    pwmA.ChangeDutyCycle(0)
-    pwmB.ChangeDutyCycle(0)
-    GPIO.output(AIN1, GPIO.LOW)
-    GPIO.output(AIN2, GPIO.LOW)
-    GPIO.output(BIN1, GPIO.LOW)
-    GPIO.output(BIN2, GPIO.LOW)
-    GPIO.output(STBY, GPIO.LOW)
+    pwmA.value = 0
+    pwmB.value = 0
+    ain1.off()
+    ain2.off()
+    bin1.off()
+    bin2.off()
+    stby.off()
     status['state'] = 'Stopped'
     status['speed'] = 'A=0 B=0'
     emit('motor_status', status)
 
 @socketio.on('camera_command')
 def handle_camera_command(data):
-    """Handle relative camera movement commands"""
+    """Handle relative camera movement commands - only update when there's actual input"""
     global servo1_position, servo2_position
     try:
         pan_delta = float(data.get('pan', 0))  # Horizontal movement
@@ -129,8 +111,12 @@ def handle_camera_command(data):
     except (ValueError, TypeError):
         return
     
+    # Only process if there's actual movement (avoid jitter from noise)
+    if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
+        return
+    
     # Update positions with very slow movement (small increments)
-    CAMERA_SPEED = 0.03  # Degrees per update - very slow to prevent over-correction
+    CAMERA_SPEED = 0.1  # Degrees per update - slow to prevent over-correction
     servo1_position += pan_delta * CAMERA_SPEED
     servo2_position += tilt_delta * CAMERA_SPEED
     
@@ -138,9 +124,9 @@ def handle_camera_command(data):
     servo1_position = max(0, min(180, servo1_position))
     servo2_position = max(0, min(180, servo2_position))
     
-    # Set servo positions and maintain with continuous PWM
-    set_servo_angle(servo1, servo1_position)
-    set_servo_angle(servo2, servo2_position)
+    # Set servo positions using GPIO Zero (handles PWM properly)
+    servo1.angle = servo1_position
+    servo2.angle = servo2_position
 
 @app.route('/status')
 def get_status():
