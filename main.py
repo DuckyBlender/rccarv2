@@ -23,8 +23,8 @@ AIN2 = 2
 STBY = 4
 BIN1 = 20
 BIN2 = 21
-SERVO1_PIN = 26  # Camera servo 1 - physically controls tilt (vertical)
-SERVO2_PIN = 6   # Camera servo 2 - physically controls pan (horizontal)
+SERVO1_PIN = 26
+SERVO2_PIN = 6
 
 # Initialize GPIO Zero with PiGPIOFactory (for all devices to avoid jitter)
 try:
@@ -101,7 +101,6 @@ status = {'state': 'Stopped', 'speed': 0}
 
 @socketio.on('motor_command')
 def handle_motor_command(data):
-    # data should be a dict: { 'a': int, 'b': int }
     try:
         a = int(data.get('a', 0))
         b = int(data.get('b', 0))
@@ -112,7 +111,6 @@ def handle_motor_command(data):
     b = max(-100, min(100, b))
     pwmA.value = abs(a) / 100.0
     pwmB.value = abs(b) / 100.0
-    # Set direction based on sign
     if a > 0:
         ain1.on()
         ain2.off()
@@ -151,63 +149,45 @@ def handle_stop_command():
 
 @socketio.on('camera_command')
 def handle_camera_command(data):
-    """Handle relative camera movement commands - only update when there's actual input"""
     global servo1_position, servo2_position
     
     if not servo1 or not servo2:
-        print("Warning: Camera command received but servos not initialized")
         return
     
-    # Check if this is a center command
     if data.get('center', False):
         try:
             servo1_position = 90
             servo2_position = 90
-            # Force update to center
             servo1.angle = 90
             servo2.angle = 90
-            time.sleep(0.3)  # Give servos time to move to center
-            print(f"Camera centered to {servo1_position} degrees")
+            time.sleep(0.3)
+            print(f"Camera centered")
         except Exception as e:
             print(f"Error centering camera: {e}")
-            import traceback
-            traceback.print_exc()
         return
     
     try:
-        pan_delta = float(data.get('pan', 0))  # Horizontal movement
-        tilt_delta = float(data.get('tilt', 0))  # Vertical movement
+        pan_delta = float(data.get('pan', 0))
+        tilt_delta = float(data.get('tilt', 0))
     except (ValueError, TypeError) as e:
-        print(f"Error parsing camera command: {e}")
         return
     
-    # Only process if there's actual movement (avoid jitter from noise)
     if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
         return
     
-    # Update positions with reasonable movement speed
-    CAMERA_SPEED = 5.0  # Degrees per update
-    # Servos are physically swapped: servo1=tilt(vertical), servo2=pan(horizontal)
-    # Servo1 decreases when going up, so negate tilt
-    servo1_position -= tilt_delta * CAMERA_SPEED  # servo1 controls tilt (vertical), inverted
-    servo2_position += pan_delta * CAMERA_SPEED   # servo2 controls pan (horizontal)
+    CAMERA_SPEED = 5.0
+    servo1_position -= tilt_delta * CAMERA_SPEED
+    servo2_position -= pan_delta * CAMERA_SPEED
     
-    # Clamp to 0-180 degree range
     servo1_position = max(0, min(180, servo1_position))
     servo2_position = max(0, min(180, servo2_position))
     
-    # Set servo positions using GPIO Zero (handles PWM properly)
     try:
-        # Always set angle - GPIO Zero handles whether to send PWM or not
-        # This ensures servos get continuous PWM signal to maintain position
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-        # Print every update to verify it's working
         print(f"Camera: pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
     except Exception as e:
         print(f"Error moving camera: {e}")
-        import traceback
-        traceback.print_exc()
 
 @app.route('/status')
 def get_status():

@@ -3,316 +3,221 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPi Car Control</title>
+    <title>RC Car Control</title>
     <style>
-        :root {
-            --primary-bg: #1a1a1a;
-            --secondary-bg: #2c2c2c;
-            --tertiary-bg: #3f3f3f;
-            --primary-text: #e0e0e0;
-            --accent-color: #007bff;
-            --accent-hover: #0056b3;
-            --danger-color: #dc3545;
-            --danger-hover: #c82333;
-            --success-color: #28a745;
-            --success-hover: #218838;
-            --border-color: #4a4a4a;
-            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background-color: var(--primary-bg);
-            color: var(--primary-text);
-            font-family: var(--font-family);
+        * {
             margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
+            padding: 0;
             box-sizing: border-box;
-            line-height: 1.6;
         }
-
-        header {
-            width: 100%;
+        body {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            padding: 15px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            color: #007bff;
         }
-
-        header h1 {
-            font-size: 2.8em;
-            color: var(--accent-color);
-            margin: 0;
-            font-weight: 600;
-        }
-
-        .main-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 25px;
-            width: 100%;
-            max-width: 1300px;
-            justify-content: center;
-        }
-
         .panel {
-            background-color: var(--secondary-bg);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.35);
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .camera-section {
-            flex: 2 1 600px; /* Flex-grow, flex-shrink, flex-basis */
-        }
-
-        .controls-section {
-            flex: 1 1 350px;
-        }
-        
-        .panel h2 {
-            margin-top: 0;
-            color: var(--primary-text);
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 12px;
-            font-size: 1.6em;
-            font-weight: 500;
-        }
-
-        .camera-section img {
-            width: 100%;
-            height: auto;
-            max-height: 500px; /* Adjusted for better viewing */
-            border: 3px solid var(--border-color);
-            background-color: #000;
-            border-radius: 6px;
-            object-fit: cover; /* Ensures the image covers the area nicely */
-        }
-        
-        .control-group {
-            background-color: var(--tertiary-bg);
-            padding: 18px;
+            background: #2c2c2c;
             border-radius: 8px;
-        }
-
-        .control-group h3 {
-            margin-top: 0;
+            padding: 15px;
             margin-bottom: 15px;
-            color: var(--primary-text);
-            font-size: 1.25em;
-            font-weight: 500;
         }
-
-        .buttons-grid {
+        .panel h2 {
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            border-bottom: 2px solid #444;
+            padding-bottom: 8px;
+        }
+        .video-feed {
+            width: 100%;
+            max-height: 480px;
+            background: #000;
+            border-radius: 6px;
+        }
+        .controls-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, auto);
-            gap: 12px;
-            align-items: center;
-            justify-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
         }
-
-        .buttons-grid button {
-            width: 100%;
-            min-height: 65px; /* Ensure buttons have a good height */
-            font-size: 1.3em;
-            font-weight: bold;
-            background-color: var(--accent-color);
+        button {
+            background: #007bff;
             color: white;
             border: none;
             border-radius: 6px;
+            padding: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            transition: all 0.2s;
+            min-height: 60px;
         }
-
-        .buttons-grid button:hover {
-            background-color: var(--accent-hover);
+        button:hover {
+            background: #0056b3;
         }
-        .buttons-grid button:active {
+        button:active {
             transform: scale(0.95);
         }
-
-        .buttons-grid .stop-button {
-            grid-column: 2;
-            grid-row: 2;
-            background-color: var(--danger-color);
+        .stop-btn {
+            background: #dc3545;
         }
-        .buttons-grid .stop-button:hover {
-            background-color: var(--danger-hover);
+        .stop-btn:hover {
+            background: #c82333;
         }
-        .buttons-grid .button-w { grid-column: 2; grid-row: 1; }
-        .buttons-grid .button-a { grid-column: 1; grid-row: 2; }
-        .buttons-grid .button-s { grid-column: 2; grid-row: 3; }
-        .buttons-grid .button-d { grid-column: 3; grid-row: 2; }
-        
-        .buttons-grid .camera-button {
-            font-size: 1.8em;
-            background-color: var(--success-color);
+        .center-btn {
+            background: #28a745;
         }
-        .buttons-grid .camera-button:hover {
-            background-color: var(--success-hover);
+        .center-btn:hover {
+            background: #218838;
         }
-        .buttons-grid #camera-up { grid-column: 2; grid-row: 1; }
-        .buttons-grid #camera-left { grid-column: 1; grid-row: 2; }
-        .buttons-grid #camera-center { grid-column: 2; grid-row: 2; background-color: var(--accent-color); }
-        .buttons-grid #camera-center:hover { background-color: var(--accent-hover); }
-        .buttons-grid #camera-right { grid-column: 3; grid-row: 2; }
-        .buttons-grid #camera-down { grid-column: 2; grid-row: 3; }
-
-        .speed-slider-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
+        .camera-btn {
+            background: #28a745;
         }
-
-        .speed-slider-container input[type="range"] {
-            width: 90%;
-            cursor: pointer;
-            margin-top: 5px;
-            accent-color: var(--accent-color); /* Modern way to style slider thumb */
+        .camera-btn:hover {
+            background: #218838;
         }
-        #speedValue {
-            font-size: 1.1em;
-            font-weight: 500;
-        }
-
-        .status-display, .gamepad-status {
-            background-color: var(--tertiary-bg);
-            padding: 12px 18px;
-            border-radius: 8px;
-            font-size: 1em;
-            min-height: 45px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            word-break: break-all;
-        }
-
-        #connectGamepadButton {
-            width: 100%;
-            padding: 12px;
-            font-size: 1.1em;
-            font-weight: 500;
-            background-color: var(--success-color);
-            color: white;
-            border: none;
+        .status {
+            background: #3f3f3f;
+            padding: 10px;
             border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            margin-top: 10px;
-        }
-        #connectGamepadButton:hover {
-            background-color: var(--success-hover);
-        }
-
-        footer {
-            width: 100%;
-            max-width: 1300px;
             text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            border-top: 1px solid var(--border-color);
-            font-size: 0.95em;
-            color: #b0b0b0;
-            background-color: var(--secondary-bg);
-            border-radius: 0 0 10px 10px;
+            margin-bottom: 10px;
         }
-        footer p { margin: 5px 0; }
-        footer a { color: var(--accent-color); text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
-
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .speed-control input {
+            flex: 1;
+        }
+        .gamepad-btn {
+            width: 100%;
+            background: #28a745;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
-    <header>
-        <h1>RPi Robotic Car Control</h1>
-    </header>
+    <div class="container">
+        <h1>RC Car Control</h1>
+        
+        <div class="panel">
+            <h2>Camera Feed</h2>
+            <img id="cameraFeed" class="video-feed" src="/mjpeg" alt="Camera Feed">
+        </div>
 
-    <div class="main-container">
-        <section class="panel camera-section">
-            <h2>Live Camera Feed</h2>
-            <img id="mjpegStream" src="/mjpeg" alt="Camera Stream Loading...">
-        </section>
+        <div class="panel">
+            <h2>Camera Control</h2>
+            <div class="controls-grid">
+                <div></div>
+                <button class="camera-btn" data-cam="up">↑</button>
+                <div></div>
+                <button class="camera-btn" data-cam="left">←</button>
+                <button class="center-btn" data-cam="center">⌂</button>
+                <button class="camera-btn" data-cam="right">→</button>
+                <div></div>
+                <button class="camera-btn" data-cam="down">↓</button>
+                <div></div>
+            </div>
+        </div>
 
-        <section class="panel controls-section">
-            <div class="control-group">
-                <h3>Manual Controls</h3>
-                <div class="buttons-grid">
-                    <button class="button-w" data-key="w">W</button>
-                    <button class="button-a" data-key="a">A</button>
-                    <button class="stop-button" data-key="stop">STOP</button>
-                    <button class="button-s" data-key="s">S</button>
-                    <button class="button-d" data-key="d">D</button>
-                </div>
+        <div class="panel">
+            <h2>Movement</h2>
+            <div class="controls-grid">
+                <div></div>
+                <button data-key="w">W</button>
+                <div></div>
+                <button data-key="a">A</button>
+                <button class="stop-btn" data-key="stop">STOP</button>
+                <button data-key="d">D</button>
+                <div></div>
+                <button data-key="s">S</button>
+                <div></div>
             </div>
+        </div>
 
-            <div class="control-group">
-                <h3>Speed Adjustment</h3>
-                <div class="speed-slider-container">
-                    <input type="range" id="speedSlider" min="0" max="100" value="50">
-                    <span id="speedValue">50%</span>
-                </div>
+        <div class="panel">
+            <h2>Speed</h2>
+            <div class="speed-control">
+                <input type="range" id="speedSlider" min="0" max="100" value="50">
+                <span id="speedValue">50%</span>
             </div>
-            
-            <div class="control-group">
-                <h3>Motor Status</h3>
-                <div id="motorStatus" class="status-display">Awaiting command...</div>
-            </div>
+        </div>
 
-            <div class="control-group">
-                <h3>Camera Control</h3>
-                <div class="buttons-grid">
-                    <button class="camera-button" id="camera-up" data-direction="up">↑</button>
-                    <button class="camera-button" id="camera-left" data-direction="left">←</button>
-                    <button class="camera-button" id="camera-center" data-direction="center">⌂</button>
-                    <button class="camera-button" id="camera-right" data-direction="right">→</button>
-                    <button class="camera-button" id="camera-down" data-direction="down">↓</button>
-                </div>
-            </div>
+        <div class="panel">
+            <h2>Status</h2>
+            <div id="status" class="status">Ready</div>
+        </div>
 
-            <div class="control-group">
-                <h3>Gamepad Control</h3>
-                <button id="connectGamepadButton">Connect Gamepad</button>
-                <div id="gamepadInfo" class="gamepad-status">Click "Connect Gamepad" and select your controller.</div>
-            </div>
-        </section>
+        <div class="panel">
+            <h2>Gamepad</h2>
+            <button id="gamepadBtn" class="gamepad-btn">Connect Gamepad</button>
+            <div id="gamepadStatus" class="status">Not connected</div>
+        </div>
     </div>
-
-    <footer>
-        <p><strong>Gamepad Instructions:</strong> For best results, use a Chrome-based browser (Chrome, Edge, Opera). Click the "Connect Gamepad" button above and select your controller from the HID device list if prompted. Standard Gamepad API will be used after permission.</p>
-        <p><strong>Controls:</strong> Keyboard: WASD for movement, Spacebar for STOP. Gamepad: Left stick for movement, L2/R2 for steering, Right stick for camera control. On-screen buttons for camera pan/tilt.</p>
-        <p>&copy; ${new Date().getFullYear()} RPi Car Project</p>
-    </footer>
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-        const motorStatusEl = document.getElementById('motorStatus');
-        const gamepadInfoEl = document.getElementById('gamepadInfo');
+        const statusEl = document.getElementById('status');
+        const gamepadStatusEl = document.getElementById('gamepadStatus');
         const speedSlider = document.getElementById('speedSlider');
         const speedValueEl = document.getElementById('speedValue');
-        const connectGamepadButton = document.getElementById('connectGamepadButton');
+        const gamepadBtn = document.getElementById('gamepadBtn');
 
         let currentSpeed = parseInt(speedSlider.value);
         const keyState = { w: false, a: false, s: false, d: false };
         let activeGamepad = null;
-        let lastMotorCmd = { a: 0, b: 0 };
         let lastSentCmd = { a: null, b: null };
         let wsConnected = false;
         let socket = null;
-        const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
-        let lastCameraCommandTime = 0;
-        const CAMERA_COMMAND_INTERVAL = 100; // ms - throttle camera commands to prevent over-correction
         let cameraControlActive = false;
         let cameraControlInterval = null;
+        let lastCameraCommandTime = 0;
+        const CAMERA_COMMAND_INTERVAL = 100;
+
+        function setupSocket() {
+            socket = io();
+            socket.on('connect', () => {
+                wsConnected = true;
+                statusEl.textContent = 'Connected';
+            });
+            socket.on('disconnect', () => {
+                wsConnected = false;
+                statusEl.textContent = 'Disconnected';
+            });
+            socket.on('motor_status', (data) => {
+                if (data && data.state) {
+                    statusEl.textContent = data.state;
+                }
+            });
+        }
+        setupSocket();
+
+        function sendMotorCommand(a, b) {
+            if (!wsConnected) return;
+            const finalA = Math.round(Math.max(-100, Math.min(100, a)) * (currentSpeed / 100));
+            const finalB = Math.round(Math.max(-100, Math.min(100, b)) * (currentSpeed / 100));
+            if (finalA === lastSentCmd.a && finalB === lastSentCmd.b) return;
+            lastSentCmd = { a: finalA, b: finalB };
+            socket.emit('motor_command', { a: finalA, b: finalB });
+        }
+
+        function sendStopCommand() {
+            if (!wsConnected) return;
+            lastSentCmd = { a: 0, b: 0 };
+            socket.emit('stop_command');
+        }
 
         function sendCameraCommand(pan, tilt) {
             if (!wsConnected) return;
@@ -325,11 +230,10 @@
 
         function startCameraControl(direction) {
             if (cameraControlActive && cameraControlInterval) {
-                // If already active with different direction, stop first
                 stopCameraControl();
             }
             cameraControlActive = true;
-            const CAMERA_STEP = 1.0; // Step value for button control
+            const CAMERA_STEP = 1.0;
             
             const directions = {
                 'up': { pan: 0, tilt: CAMERA_STEP },
@@ -339,15 +243,10 @@
             };
             
             const step = directions[direction];
-            if (!step) {
-                console.log('Invalid camera direction:', direction);
-                return;
-            }
+            if (!step) return;
             
-            // Send immediate command
             sendCameraCommand(step.pan, step.tilt);
             
-            // Then set up interval for continuous movement
             cameraControlInterval = setInterval(() => {
                 if (cameraControlActive) {
                     sendCameraCommand(step.pan, step.tilt);
@@ -363,57 +262,10 @@
             }
         }
 
-        function setupSocket() {
-            socket = io();
-            socket.on('connect', () => {
-                wsConnected = true;
-                motorStatusEl.textContent = 'WebSocket connected';
-            });
-            socket.on('disconnect', () => {
-                wsConnected = false;
-                motorStatusEl.textContent = 'WebSocket disconnected';
-            });
-            socket.on('motor_status', (data) => {
-                if (data && data.state) {
-                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
-                }
-            });
-        }
-        setupSocket();
-
-        function sendMotorCommandWS(targetMotorA, targetMotorB) {
-            if (!wsConnected) return;
-            // Scale raw motor values (-100 to 100) by currentSpeed
-            const finalA = Math.round(Math.max(-100, Math.min(100, targetMotorA)) * (currentSpeed / 100));
-            const finalB = Math.round(Math.max(-100, Math.min(100, targetMotorB)) * (currentSpeed / 100));
-            // Debounce: Only send if values changed
-            if (finalA === lastSentCmd.a && finalB === lastSentCmd.b) return;
-            lastSentCmd = { a: finalA, b: finalB };
-            socket.emit('motor_command', { a: finalA, b: finalB });
-        }
-        function sendStopCommandWS() {
-            if (!wsConnected) return;
-            lastSentCmd = { a: 0, b: 0 };
-            socket.emit('stop_command');
-        }
-
-        function updateSpeedDisplay() {
-            currentSpeed = parseInt(speedSlider.value);
-            speedValueEl.textContent = `${currentSpeed}%`;
-            // If a movement command is active (e.g. key held or joystick moved), resend with new speed
-            if (Object.values(keyState).some(s => s) || activeGamepad) {
-                handleMovement();
-            }
-        }
-        speedSlider.addEventListener('input', updateSpeedDisplay);
-        updateSpeedDisplay();
-
         function handleMovement() {
-            // Prioritize gamepad if active and providing input
             if (activeGamepad && pollGamepadInput()) {
                 return;
             }
-            // Keyboard movement
             let y = 0;
             let x = 0;
             if (keyState.w) y = 100;
@@ -421,7 +273,7 @@
             if (keyState.a) x = -100;
             else if (keyState.d) x = 100;
             if (y === 0 && x === 0) {
-                sendStopCommandWS();
+                sendStopCommand();
                 return;
             }
             let motorA, motorB;
@@ -437,104 +289,106 @@
                 motorA = x;
                 motorB = -x;
             }
-            sendMotorCommandWS(motorA, motorB);
+            sendMotorCommand(motorA, motorB);
         }
 
-        // --- Keyboard Event Listeners ---
-        document.addEventListener('keydown', (event) => {
-            const key = event.key.toLowerCase();
+        speedSlider.addEventListener('input', () => {
+            currentSpeed = parseInt(speedSlider.value);
+            speedValueEl.textContent = `${currentSpeed}%`;
+            if (Object.values(keyState).some(s => s) || activeGamepad) {
+                handleMovement();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
             if (keyState.hasOwnProperty(key) && !keyState[key]) {
                 keyState[key] = true;
                 handleMovement();
             } else if (key === ' ') {
-                event.preventDefault();
-                sendStopCommandWS();
+                e.preventDefault();
+                sendStopCommand();
             }
         });
-        document.addEventListener('keyup', (event) => {
-            const key = event.key.toLowerCase();
+
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
             if (keyState.hasOwnProperty(key)) {
                 keyState[key] = false;
-                if (!Object.values(keyState).some(s => s) && !activeGamepad) {
-                    handleMovement();
-                } else {
-                    handleMovement();
-                }
+                handleMovement();
             }
         });
-        // --- On-Screen Button Listeners ---
-        document.querySelectorAll('.buttons-grid button').forEach(button => {
+
+        document.querySelectorAll('button[data-key]').forEach(button => {
             const key = button.dataset.key;
-            const direction = button.dataset.direction;
             
             function pressButton(e) {
                 e.preventDefault();
-                e.stopPropagation();
                 if (key === 'stop') {
-                    sendStopCommandWS();
-                } else if (direction === 'center') {
-                    // Center camera servos
-                    if (wsConnected) {
-                        stopCameraControl();
-                        socket.emit('camera_command', { center: true });
-                    }
-                } else if (direction) {
-                    // Camera control
-                    startCameraControl(direction);
+                    sendStopCommand();
                 } else if (keyState.hasOwnProperty(key)) {
                     keyState[key] = true;
                     handleMovement();
                 }
             }
+            
             function releaseButton(e) {
                 e.preventDefault();
-                e.stopPropagation();
-                if (direction && direction !== 'center') {
-                    stopCameraControl();
-                } else if (key !== 'stop' && keyState.hasOwnProperty(key)) {
+                if (key !== 'stop' && keyState.hasOwnProperty(key)) {
                     keyState[key] = false;
                     handleMovement();
                 }
             }
+            
             button.addEventListener('mousedown', pressButton);
             button.addEventListener('mouseup', releaseButton);
-            button.addEventListener('mouseleave', (e) => {
-                if (direction && direction !== 'center') {
-                    stopCameraControl();
-                } else if (key !== 'stop' && keyState[key]) {
-                    releaseButton(e);
-                }
-            });
-            button.addEventListener('touchstart', (e) => { 
-                e.preventDefault(); 
-                pressButton(e); 
-            }, { passive: false });
-            button.addEventListener('touchend', (e) => { 
-                e.preventDefault(); 
-                releaseButton(e); 
-            }, { passive: false });
+            button.addEventListener('mouseleave', releaseButton);
+            button.addEventListener('touchstart', pressButton, { passive: false });
+            button.addEventListener('touchend', releaseButton, { passive: false });
         });
 
-        // --- Gamepad Logic ---
-        let lastGamepadActive = false;
-        connectGamepadButton.addEventListener('click', async () => {
+        document.querySelectorAll('button[data-cam]').forEach(button => {
+            const direction = button.dataset.cam;
+            
+            function pressButton(e) {
+                e.preventDefault();
+                if (direction === 'center') {
+                    if (wsConnected) {
+                        stopCameraControl();
+                        socket.emit('camera_command', { center: true });
+                    }
+                } else {
+                    startCameraControl(direction);
+                }
+            }
+            
+            function releaseButton(e) {
+                e.preventDefault();
+                if (direction !== 'center') {
+                    stopCameraControl();
+                }
+            }
+            
+            button.addEventListener('mousedown', pressButton);
+            button.addEventListener('mouseup', releaseButton);
+            button.addEventListener('mouseleave', releaseButton);
+            button.addEventListener('touchstart', pressButton, { passive: false });
+            button.addEventListener('touchend', releaseButton, { passive: false });
+        });
+
+        gamepadBtn.addEventListener('click', async () => {
             if (!navigator.hid) {
-                gamepadInfoEl.innerHTML = "WebHID API not supported. <br>Please use Chrome, Edge, or Opera.";
+                gamepadStatusEl.textContent = "WebHID not supported";
                 return;
             }
             try {
-                const devices = await navigator.hid.requestDevice({ filters: [] });
-                if (devices.length > 0) {
-                    gamepadInfoEl.textContent = "HID device access granted. Checking for gamepads...";
-                } else {
-                    gamepadInfoEl.textContent = "No HID device selected. Gamepad may not be accessible.";
-                }
+                await navigator.hid.requestDevice({ filters: [] });
                 scanGamepads();
             } catch (error) {
-                gamepadInfoEl.textContent = "Could not get HID permission. Gamepad may not work.";
                 console.error("HID permission error:", error);
             }
         });
+
         function scanGamepads() {
             const gamepads = navigator.getGamepads();
             for (const gp of gamepads) {
@@ -544,33 +398,35 @@
                 }
             }
         }
+
         function handleGamepadConnected(gp) {
             activeGamepad = gp;
-            gamepadInfoEl.textContent = `Gamepad: ${gp.id.substring(0,25)}...`;
-            connectGamepadButton.style.display = 'none';
+            gamepadStatusEl.textContent = `Connected: ${gp.id.substring(0,30)}`;
+            gamepadBtn.style.display = 'none';
             requestAnimationFrame(gamepadLoop);
         }
+
         function handleGamepadDisconnected(event) {
             if (activeGamepad && activeGamepad.index === event.gamepad.index) {
                 activeGamepad = null;
-                gamepadInfoEl.textContent = "Gamepad disconnected. Reconnect or use keyboard.";
-                connectGamepadButton.style.display = 'block';
-                sendStopCommandWS();
+                gamepadStatusEl.textContent = "Disconnected";
+                gamepadBtn.style.display = 'block';
+                sendStopCommand();
             }
         }
+
         window.addEventListener("gamepadconnected", (e) => handleGamepadConnected(e.gamepad));
         window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
+
         function pollGamepadInput() {
             if (!activeGamepad) return false;
             const gamepads = navigator.getGamepads();
             if (!gamepads || gamepads.length === 0) {
                 activeGamepad = null;
-                lastGamepadActive = false;
                 return false;
             }
             const gp = gamepads[activeGamepad.index];
             if (!gp) {
-                // Try to find any connected gamepad
                 for (let i = 0; i < gamepads.length; i++) {
                     if (gamepads[i]) {
                         activeGamepad = gamepads[i];
@@ -578,21 +434,19 @@
                     }
                 }
                 if (!activeGamepad) {
-                    lastGamepadActive = false;
                     return false;
                 }
-                return pollGamepadInput(); // Recursive call with new gamepad
+                return pollGamepadInput();
             }
+
             const leftStickX = gp.axes[0] || 0;
             const leftStickY = gp.axes[1] || 0;
             const rightStickX = gp.axes[2] || 0;
             const rightStickY = gp.axes[3] || 0;
             
-            // L2 and R2 buttons (usually buttons[6] and buttons[7], or can be analog)
             const l2Button = gp.buttons[6] ? gp.buttons[6].value : 0;
             const r2Button = gp.buttons[7] ? gp.buttons[7].value : 0;
             
-            // D-pad buttons (buttons[12-15])
             const dpadUp = gp.buttons[12] ? gp.buttons[12].pressed : false;
             const dpadDown = gp.buttons[13] ? gp.buttons[13].pressed : false;
             const dpadLeft = gp.buttons[14] ? gp.buttons[14].pressed : false;
@@ -600,53 +454,43 @@
             
             const deadzone = 0.20;
             let yInput = Math.abs(leftStickY) > deadzone ? leftStickY * 100 : 0;
-            let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0; // xInput in range [-1,1]
+            let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0;
             
-            // D-pad overrides joystick for movement
             if (dpadUp) yInput = -100;
             else if (dpadDown) yInput = 100;
             if (dpadLeft) xInput = -1;
             else if (dpadRight) xInput = 1;
             
-            // Handle L2/R2 steering
             let steeringInput = 0;
             if (l2Button > 0.1) {
-                steeringInput = -l2Button; // L2 = steer left
+                steeringInput = -l2Button;
             } else if (r2Button > 0.1) {
-                steeringInput = r2Button; // R2 = steer right
+                steeringInput = r2Button;
             }
             
-            // Apply steering to xInput if triggers are pressed
             if (Math.abs(steeringInput) > 0.1) {
                 xInput = steeringInput;
             }
             
-            // Handle camera movement with right joystick
-            // Check all axes to find right stick (some controllers use different indices)
             let actualRightStickX = rightStickX;
             let actualRightStickY = rightStickY;
             
-            // If axes 2/3 are undefined or zero, try alternative indices (some controllers use 4/5)
             if (gp.axes.length > 4 && (Math.abs(rightStickX) < 0.01 && Math.abs(rightStickY) < 0.01)) {
                 actualRightStickX = gp.axes[4] || 0;
                 actualRightStickY = gp.axes[5] || 0;
             }
             
             const cameraDeadzone = 0.15;
-            const rightStickXAbs = Math.abs(actualRightStickX);
-            const rightStickYAbs = Math.abs(actualRightStickY);
             let panDelta = 0;
             let tiltDelta = 0;
             
-            // Only send commands when joystick is actually moved beyond deadzone
-            if (rightStickXAbs > cameraDeadzone) {
-                panDelta = actualRightStickX; // Right stick X = pan (horizontal)
+            if (Math.abs(actualRightStickX) > cameraDeadzone) {
+                panDelta = actualRightStickX;
             }
-            if (rightStickYAbs > cameraDeadzone) {
-                tiltDelta = -actualRightStickY; // Right stick Y = tilt (vertical, inverted)
+            if (Math.abs(actualRightStickY) > cameraDeadzone) {
+                tiltDelta = -actualRightStickY;
             }
             
-            // Send camera commands if joystick is moved (throttled)
             const now = Date.now();
             if ((panDelta !== 0 || tiltDelta !== 0) && (now - lastCameraCommandTime) >= CAMERA_COMMAND_INTERVAL) {
                 if (wsConnected) {
@@ -655,43 +499,27 @@
                 }
             }
             
-            // Handle motor control
             if (yInput === 0 && xInput === 0) {
-                if (lastGamepadActive) {
-                    if (!Object.values(keyState).some(s => s)) {
-                        sendStopCommandWS();
-                    }
-                    lastGamepadActive = false;
-                }
-                // Return true if camera is being controlled, false otherwise
                 return (panDelta !== 0 || tiltDelta !== 0);
             }
-            lastGamepadActive = true;
+
             let motorA_gp, motorB_gp;
             if (yInput !== 0) {
-                // Linear scaling for tank drive
-                // Up = -100, Down = 100, so invert yInput for forward
                 const speed = -yInput;
-                // xInput in [-1,1], left = -1, right = 1
                 const leftScale = xInput < 0 ? 1 - Math.abs(xInput) : 1;
                 const rightScale = xInput > 0 ? 1 - Math.abs(xInput) : 1;
                 motorA_gp = speed * leftScale;
                 motorB_gp = speed * rightScale;
             } else {
-                // Pivot in place
                 motorA_gp = xInput * 100;
                 motorB_gp = -xInput * 100;
             }
-            sendMotorCommandWS(motorA_gp, motorB_gp);
-            const steeringInfo = steeringInput !== 0 ? ` L2:${l2Button.toFixed(2)} R2:${r2Button.toFixed(2)}` : '';
-            const cameraInfo = (panDelta !== 0 || tiltDelta !== 0) ? ` | Camera RX:${actualRightStickX.toFixed(2)} RY:${actualRightStickY.toFixed(2)}` : '';
-            const axisInfo = gp.axes.length > 0 ? ` [Axes: ${gp.axes.length}]` : '';
-            gamepadInfoEl.textContent = `Gamepad Active | LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)}${steeringInfo} | Motors A:${lastSentCmd.a} B:${lastSentCmd.b}${cameraInfo}${axisInfo}`;
+            sendMotorCommand(motorA_gp, motorB_gp);
             return true;
         }
+
         function gamepadLoop() {
             if (!activeGamepad) {
-                // Check if gamepad got disconnected
                 const gamepads = navigator.getGamepads();
                 if (gamepads && gamepads.length > 0) {
                     for (let i = 0; i < gamepads.length; i++) {
@@ -706,27 +534,12 @@
             try {
                 pollGamepadInput();
             } catch (error) {
-                console.error('Error in gamepad polling:', error);
+                console.error('Gamepad error:', error);
             }
             requestAnimationFrame(gamepadLoop);
         }
-        // --- Initial Status Fetch ---
-        async function fetchInitialStatus() {
-            try {
-                const response = await fetch('/status');
-                const data = await response.json();
-                if (data && data.state) {
-                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
-                }
-            } catch (error) {
-                console.error('Error fetching initial status:', error);
-                motorStatusEl.textContent = 'Status: Error connecting to car.';
-            }
-        }
-        document.querySelector('footer p:last-child').textContent = `© ${new Date().getFullYear()} RPi Car Project`;
-        fetchInitialStatus();
+
         scanGamepads();
     </script>
 </body>
 </html>
-
