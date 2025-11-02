@@ -592,9 +592,21 @@
             const l2Button = gp.buttons[6] ? gp.buttons[6].value : 0;
             const r2Button = gp.buttons[7] ? gp.buttons[7].value : 0;
             
+            // D-pad buttons (buttons[12-15])
+            const dpadUp = gp.buttons[12] ? gp.buttons[12].pressed : false;
+            const dpadDown = gp.buttons[13] ? gp.buttons[13].pressed : false;
+            const dpadLeft = gp.buttons[14] ? gp.buttons[14].pressed : false;
+            const dpadRight = gp.buttons[15] ? gp.buttons[15].pressed : false;
+            
             const deadzone = 0.20;
             let yInput = Math.abs(leftStickY) > deadzone ? leftStickY * 100 : 0;
             let xInput = Math.abs(leftStickX) > deadzone ? leftStickX : 0; // xInput in range [-1,1]
+            
+            // D-pad overrides joystick for movement
+            if (dpadUp) yInput = -100;
+            else if (dpadDown) yInput = 100;
+            if (dpadLeft) xInput = -1;
+            else if (dpadRight) xInput = 1;
             
             // Handle L2/R2 steering
             let steeringInput = 0;

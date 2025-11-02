@@ -23,8 +23,8 @@ AIN2 = 2
 STBY = 4
 BIN1 = 20
 BIN2 = 21
-SERVO1_PIN = 26  # Camera servo 1 (horizontal/pan)
-SERVO2_PIN = 6   # Camera servo 2 (vertical/tilt)
+SERVO1_PIN = 26  # Camera servo 1 - physically controls tilt (vertical)
+SERVO2_PIN = 6   # Camera servo 2 - physically controls pan (horizontal)
 
 # Initialize GPIO Zero with PiGPIOFactory (for all devices to avoid jitter)
 try:
@@ -186,9 +186,11 @@ def handle_camera_command(data):
         return
     
     # Update positions with reasonable movement speed
-    CAMERA_SPEED = 2.0  # Degrees per update - fast enough to be visible
-    servo1_position += pan_delta * CAMERA_SPEED
-    servo2_position += tilt_delta * CAMERA_SPEED
+    CAMERA_SPEED = 5.0  # Degrees per update
+    # Servos are physically swapped: servo1=tilt(vertical), servo2=pan(horizontal)
+    # Servo1 decreases when going up, so negate tilt
+    servo1_position -= tilt_delta * CAMERA_SPEED  # servo1 controls tilt (vertical), inverted
+    servo2_position += pan_delta * CAMERA_SPEED   # servo2 controls pan (horizontal)
     
     # Clamp to 0-180 degree range
     servo1_position = max(0, min(180, servo1_position))
