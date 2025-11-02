@@ -13,7 +13,13 @@ from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",
+    logger=True,
+    engineio_logger=True,
+)
 
 # Define GPIO pins
 PWMA = 12
@@ -132,8 +138,20 @@ stby.off()  # Initially in standby
 status = {"state": "Stopped", "speed": 0}
 
 
+@socketio.on("connect")
+def handle_connect():
+    print(f"✅ Client connected: {request.sid}")
+    emit("motor_status", {"state": "Connected to server"})
+
+
+@socketio.on("disconnect")
+def handle_disconnect():
+    print(f"❌ Client disconnected: {request.sid}")
+
+
 @socketio.on("motor_command")
 def handle_motor_command(data):
+    print(f"📨 Motor command received: {data}")
     try:
         a = int(data.get("a", 0))
         b = int(data.get("b", 0))
@@ -169,6 +187,7 @@ def handle_motor_command(data):
 
 @socketio.on("stop_command")
 def handle_stop_command():
+    print(f"🛑 Stop command received")
     pwmA.value = 0
     pwmB.value = 0
     ain1.off()
@@ -183,6 +202,7 @@ def handle_stop_command():
 
 @socketio.on("camera_command")
 def handle_camera_command(data):
+    print(f"📷 Camera command received: {data}")
     global servo1_position, servo2_position
 
     if not servo1 or not servo2:
@@ -297,4 +317,8 @@ def mjpeg_stream():
 
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=25565)
+    print("🚀 Starting Flask-SocketIO server on port 25565...")
+    print("📡 WebSocket endpoint: http://0.0.0.0:25565")
+    socketio.run(
+        app, host="0.0.0.0", port=25565, debug=False, allow_unsafe_werkzeug=True
+    )
