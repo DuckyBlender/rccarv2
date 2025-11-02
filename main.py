@@ -13,7 +13,7 @@ from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", max_http_buffer_size=1e6, async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', engineio_logger=False)
 
 # Define GPIO pins
 PWMA = 12
@@ -146,9 +146,7 @@ def handle_stop_command():
     status['speed'] = 'A=0 B=0'
     emit('motor_status', status)
 
-_camera_lock = threading.Lock()
 _last_camera_update = 0
-_camera_update_interval = 0.02
 
 @socketio.on('camera_command')
 def handle_camera_command(data):
@@ -158,45 +156,43 @@ def handle_camera_command(data):
         return
     
     current_time = time.time()
-    if current_time - _last_camera_update < _camera_update_interval:
+    if current_time - _last_camera_update < 0.05:
+        return
+    _last_camera_update = current_time
+    
+    if data.get('center', False):
+        try:
+            servo1_position = 90
+            servo2_position = 90
+            servo1.angle = 90
+            servo2.angle = 90
+            print(f"Camera centered")
+        except Exception as e:
+            print(f"Error centering camera: {e}")
         return
     
-    with _camera_lock:
-        _last_camera_update = current_time
-        
-        if data.get('center', False):
-            try:
-                servo1_position = 90
-                servo2_position = 90
-                servo1.angle = 90
-                servo2.angle = 90
-                print(f"Camera centered")
-            except Exception as e:
-                print(f"Error centering camera: {e}")
-            return
-        
-        try:
-            pan_delta = float(data.get('pan', 0))
-            tilt_delta = float(data.get('tilt', 0))
-            camera_speed = float(data.get('speed', 5.0))
-        except (ValueError, TypeError):
-            return
-        
-        if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
-            return
-        
-        camera_speed = max(2.0, min(10.0, camera_speed))
-        servo1_position -= tilt_delta * camera_speed
-        servo2_position -= pan_delta * camera_speed
-        
-        servo1_position = max(0, min(180, servo1_position))
-        servo2_position = max(0, min(180, servo2_position))
-        
-        try:
-            servo1.angle = servo1_position
-            servo2.angle = servo2_position
-        except Exception as e:
-            print(f"Error moving camera: {e}")
+    try:
+        pan_delta = float(data.get('pan', 0))
+        tilt_delta = float(data.get('tilt', 0))
+        camera_speed = float(data.get('speed', 5.0))
+    except (ValueError, TypeError):
+        return
+    
+    if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
+        return
+    
+    camera_speed = max(2.0, min(10.0, camera_speed))
+    servo1_position -= tilt_delta * camera_speed
+    servo2_position -= pan_delta * camera_speed
+    
+    servo1_position = max(0, min(180, servo1_position))
+    servo2_position = max(0, min(180, servo2_position))
+    
+    try:
+        servo1.angle = servo1_position
+        servo2.angle = servo2_position
+    except Exception as e:
+        print(f"Error moving camera: {e}")
 
 @app.route('/status')
 def get_status():
