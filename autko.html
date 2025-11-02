@@ -262,7 +262,7 @@
         let r3Pressed = false;
         const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
         let lastCameraCommandTime = 0;
-        const CAMERA_COMMAND_INTERVAL = 100; // ms - throttle camera commands to prevent over-correction
+        const CAMERA_COMMAND_INTERVAL = 200;
         let cameraControlActive = false;
         let cameraControlInterval = null;
 
@@ -634,12 +634,16 @@
                 tiltDelta = Math.max(-1, Math.min(1, -normalizedY));
             }
             
-            // Send camera commands if joystick is moved (throttled)
+            // Send camera commands if joystick is moved (throttled and debounced)
             const now = Date.now();
             if ((panDelta !== 0 || tiltDelta !== 0) && (now - lastCameraCommandTime) >= CAMERA_COMMAND_INTERVAL) {
-                if (wsConnected) {
-                    socket.emit('camera_command', { pan: panDelta, tilt: tiltDelta, speed: currentCameraSpeed });
-                    lastCameraCommandTime = now;
+                if (wsConnected && socket && socket.connected) {
+                    try {
+                        socket.emit('camera_command', { pan: panDelta, tilt: tiltDelta, speed: currentCameraSpeed });
+                        lastCameraCommandTime = now;
+                    } catch (e) {
+                        console.error('Camera command error:', e);
+                    }
                 }
             }
             
