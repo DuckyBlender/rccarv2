@@ -49,6 +49,14 @@
             margin: 0 auto;
         }
         
+        #mjpegStream {
+            width: 100%;
+            border-radius: 6px;
+            background: #000;
+            max-height: 400px;
+            object-fit: contain;
+        }
+        
         .control-group {
             background-color: var(--tertiary-bg);
             padding: 12px;
@@ -156,6 +164,9 @@
 <body>
     <div class="main-container">
         <section class="panel controls-section">
+            <div class="control-group">
+                <img id="mjpegStream" src="/mjpeg" alt="Camera Feed" style="width: 100%; border-radius: 6px; background: #000;">
+            </div>
             <div class="control-group">
                 <h3>Camera Control</h3>
                 <div class="buttons-grid">
