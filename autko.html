@@ -214,21 +214,24 @@
 
             <div class="control-group">
                 <h3>Status: <span id="motorStatus">Ready</span></h3>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <div style="flex: 1;">
-                        <label style="font-size: 0.9em; display: block; margin-bottom: 5px;">Speed</label>
-                        <input type="range" id="speedSlider" min="0" max="100" value="50" style="width: 100%;">
-                    </div>
-                    <div style="flex: 1;">
-                        <label style="font-size: 0.9em; display: block; margin-bottom: 5px;">Camera Speed</label>
-                        <input type="range" id="cameraSpeedSlider" min="2" max="10" value="5" style="width: 100%;">
-                    </div>
+            </div>
+
+            <div class="controls-row">
+                <div class="control-group">
+                    <h3>Movement Speed: <span id="speedValue">50</span>%</h3>
+                    <input type="range" id="speedSlider" min="0" max="100" value="50" style="width: 100%;">
+                </div>
+                <div class="control-group">
+                    <h3>Camera Speed: <span id="cameraSpeedValue">5</span></h3>
+                    <input type="range" id="cameraSpeedSlider" min="2" max="10" value="5" style="width: 100%;">
                 </div>
             </div>
 
             <div class="control-group">
+                <h3>Gamepad</h3>
                 <button id="connectGamepadButton">Connect Gamepad</button>
                 <div id="gamepadInfo" class="gamepad-status" style="margin-top: 10px;">Not connected</div>
+                <div id="gamepadDebug" class="gamepad-status" style="margin-top: 5px; font-size: 0.85em; color: #b0b0b0;"></div>
             </div>
         </section>
     </div>
@@ -238,8 +241,11 @@
     <script>
         const motorStatusEl = document.getElementById('motorStatus');
         const gamepadInfoEl = document.getElementById('gamepadInfo');
+        const gamepadDebugEl = document.getElementById('gamepadDebug');
         const speedSlider = document.getElementById('speedSlider');
+        const speedValueEl = document.getElementById('speedValue');
         const cameraSpeedSlider = document.getElementById('cameraSpeedSlider');
+        const cameraSpeedValueEl = document.getElementById('cameraSpeedValue');
         const connectGamepadButton = document.getElementById('connectGamepadButton');
 
         let currentSpeed = parseInt(speedSlider.value);
@@ -319,7 +325,7 @@
             });
             socket.on('motor_status', (data) => {
                 if (data && data.state) {
-                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
+                    motorStatusEl.textContent = data.state;
                 }
             });
         }
@@ -343,6 +349,7 @@
 
         speedSlider.addEventListener('input', () => {
             currentSpeed = parseInt(speedSlider.value);
+            speedValueEl.textContent = currentSpeed;
             if (Object.values(keyState).some(s => s) || activeGamepad) {
                 handleMovement();
             }
@@ -350,7 +357,11 @@
         
         cameraSpeedSlider.addEventListener('input', () => {
             currentCameraSpeed = parseFloat(cameraSpeedSlider.value);
+            cameraSpeedValueEl.textContent = currentCameraSpeed;
         });
+        
+        speedValueEl.textContent = currentSpeed;
+        cameraSpeedValueEl.textContent = currentCameraSpeed;
 
         function handleMovement() {
             // Prioritize gamepad if active and providing input
@@ -643,10 +654,18 @@
                 motorB_gp = -xInput * 100;
             }
             sendMotorCommandWS(motorA_gp, motorB_gp);
-            const steeringInfo = steeringInput !== 0 ? ` L2:${l2Button.toFixed(2)} R2:${r2Button.toFixed(2)}` : '';
-            const cameraInfo = (panDelta !== 0 || tiltDelta !== 0) ? ` | Camera RX:${actualRightStickX.toFixed(2)} RY:${actualRightStickY.toFixed(2)}` : '';
-            const axisInfo = gp.axes.length > 0 ? ` [Axes: ${gp.axes.length}]` : '';
-            gamepadInfoEl.textContent = `Gamepad Active | LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)}${steeringInfo} | Motors A:${lastSentCmd.a} B:${lastSentCmd.b}${cameraInfo}${axisInfo}`;
+            let debugInfo = `LX:${leftStickX.toFixed(2)} LY:${leftStickY.toFixed(2)}`;
+            if (steeringInput !== 0) {
+                debugInfo += ` | L2:${l2Button.toFixed(2)} R2:${r2Button.toFixed(2)}`;
+            }
+            if (panDelta !== 0 || tiltDelta !== 0) {
+                debugInfo += ` | Camera RX:${actualRightStickX.toFixed(2)} RY:${actualRightStickY.toFixed(2)}`;
+            }
+            debugInfo += ` | Motors: ${lastSentCmd.a} ${lastSentCmd.b}`;
+            if (gp.axes.length > 0) {
+                debugInfo += ` | Axes: ${gp.axes.length}`;
+            }
+            gamepadDebugEl.textContent = debugInfo;
             return true;
         }
         function gamepadLoop() {
@@ -676,11 +695,11 @@
                 const response = await fetch('/status');
                 const data = await response.json();
                 if (data && data.state) {
-                    motorStatusEl.textContent = `Status: ${data.state} | Speed Setting: ${data.speed}`;
+                    motorStatusEl.textContent = data.state;
                 }
             } catch (error) {
                 console.error('Error fetching initial status:', error);
-                motorStatusEl.textContent = 'Status: Error connecting to car.';
+                motorStatusEl.textContent = 'Error connecting';
             }
         }
         fetchInitialStatus();

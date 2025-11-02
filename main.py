@@ -130,8 +130,7 @@ def handle_motor_command(data):
         bin1.off()
         bin2.off()
     stby.on() if (a != 0 or b != 0) else stby.off()
-    status['state'] = f"Motors: A={a} B={b}"
-    status['speed'] = f"A={a} B={b}"
+    status['state'] = f"{abs(a)}% {abs(b)}%" if (a != 0 or b != 0) else "Stopped"
     emit('motor_status', status)
 
 @socketio.on('stop_command')
@@ -186,7 +185,6 @@ def handle_camera_command(data):
     try:
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-        print(f"Camera: pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
     except Exception as e:
         print(f"Error moving camera: {e}")
 
