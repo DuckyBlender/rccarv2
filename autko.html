@@ -480,8 +480,8 @@
                 if (y !== 0) {
                     motorA = y;
                     motorB = y;
-                    if (x < 0) motorA = y * 0.3;
-                    else if (x > 0) motorB = y * 0.3;
+                    if (x < 0) motorA = y * 0.6;
+                    else if (x > 0) motorB = y * 0.6;
                 } else {
                     motorA = x;
                     motorB = -x;
@@ -502,7 +502,23 @@
             // Keyboard Events
             document.addEventListener("keydown", (e) => {
                 const key = e.key.toLowerCase();
-                if (keyState.hasOwnProperty(key) && !keyState[key]) {
+
+                // Arrow keys for camera control
+                if (
+                    key === "arrowup" ||
+                    key === "arrowdown" ||
+                    key === "arrowleft" ||
+                    key === "arrowright"
+                ) {
+                    e.preventDefault();
+                    const dirMap = {
+                        arrowup: "up",
+                        arrowdown: "down",
+                        arrowleft: "left",
+                        arrowright: "right",
+                    };
+                    startCameraControl(dirMap[key]);
+                } else if (keyState.hasOwnProperty(key) && !keyState[key]) {
                     keyState[key] = true;
                     updateMotors();
                 } else if (key === " ") {
@@ -513,7 +529,17 @@
 
             document.addEventListener("keyup", (e) => {
                 const key = e.key.toLowerCase();
-                if (keyState.hasOwnProperty(key)) {
+
+                // Stop camera control on arrow key release
+                if (
+                    key === "arrowup" ||
+                    key === "arrowdown" ||
+                    key === "arrowleft" ||
+                    key === "arrowright"
+                ) {
+                    e.preventDefault();
+                    stopCameraControl();
+                } else if (keyState.hasOwnProperty(key)) {
                     keyState[key] = false;
                     updateMotors();
                 }
