@@ -13,7 +13,7 @@ from gpiozero import AngularServo, OutputDevice, PWMOutputDevice
 from gpiozero.pins.pigpio import PiGPIOFactory
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', engineio_logger=False)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Define GPIO pins
 PWMA = 12
@@ -146,19 +146,12 @@ def handle_stop_command():
     status['speed'] = 'A=0 B=0'
     emit('motor_status', status)
 
-_last_camera_update = 0
-
 @socketio.on('camera_command')
 def handle_camera_command(data):
-    global servo1_position, servo2_position, _last_camera_update
+    global servo1_position, servo2_position
     
     if not servo1 or not servo2:
         return
-    
-    current_time = time.time()
-    if current_time - _last_camera_update < 0.05:
-        return
-    _last_camera_update = current_time
     
     if data.get('center', False):
         try:
@@ -166,6 +159,7 @@ def handle_camera_command(data):
             servo2_position = 90
             servo1.angle = 90
             servo2.angle = 90
+            time.sleep(0.3)
             print(f"Camera centered")
         except Exception as e:
             print(f"Error centering camera: {e}")
@@ -175,7 +169,7 @@ def handle_camera_command(data):
         pan_delta = float(data.get('pan', 0))
         tilt_delta = float(data.get('tilt', 0))
         camera_speed = float(data.get('speed', 5.0))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         return
     
     if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
