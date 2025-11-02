@@ -185,8 +185,8 @@ def handle_camera_command(data):
     if abs(pan_delta) < 0.01 and abs(tilt_delta) < 0.01:
         return
     
-    # Update positions with very slow movement (small increments)
-    CAMERA_SPEED = 0.1  # Degrees per update - slow to prevent over-correction
+    # Update positions with reasonable movement speed
+    CAMERA_SPEED = 2.0  # Degrees per update - fast enough to be visible
     servo1_position += pan_delta * CAMERA_SPEED
     servo2_position += tilt_delta * CAMERA_SPEED
     
@@ -200,10 +200,8 @@ def handle_camera_command(data):
         # This ensures servos get continuous PWM signal to maintain position
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-        # Only print occasional updates to reduce spam
-        import random
-        if random.random() < 0.05:  # Print ~5% of updates
-            print(f"Camera: pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
+        # Print every update to verify it's working
+        print(f"Camera: pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
     except Exception as e:
         print(f"Error moving camera: {e}")
         import traceback
