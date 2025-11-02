@@ -79,15 +79,19 @@ except Exception as e:
 servo1_position = 90
 servo2_position = 90
 
-# Set servos to center position
+# Set servos to center position and keep them active
 if servo1 and servo2:
     try:
+        # Set initial position
         servo1.angle = servo1_position
         servo2.angle = servo2_position
         print(f"Servos set to center position: {servo1_position} degrees")
         time.sleep(0.5)  # Allow servos to move to center
+        # Servos should remain active with GPIO Zero - no need to detach
     except Exception as e:
         print(f"Error setting servo center position: {e}")
+        import traceback
+        traceback.print_exc()
 else:
     print("Warning: Servos not initialized!")
 
@@ -159,6 +163,7 @@ def handle_camera_command(data):
         try:
             servo1_position = 90
             servo2_position = 90
+            # Force update to center
             servo1.angle = 90
             servo2.angle = 90
             time.sleep(0.3)  # Give servos time to move to center
@@ -191,12 +196,14 @@ def handle_camera_command(data):
     
     # Set servo positions using GPIO Zero (handles PWM properly)
     try:
-        # Direct assignment - GPIO Zero handles the PWM
+        # Always set angle - GPIO Zero handles whether to send PWM or not
+        # This ensures servos get continuous PWM signal to maintain position
         servo1.angle = servo1_position
         servo2.angle = servo2_position
-        # Only print every 10th update to reduce spam
-        if int(servo1_position * 10) % 10 == 0 or int(servo2_position * 10) % 10 == 0:
-            print(f"Camera moved to pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
+        # Only print occasional updates to reduce spam
+        import random
+        if random.random() < 0.05:  # Print ~5% of updates
+            print(f"Camera: pan={servo1_position:.1f}°, tilt={servo2_position:.1f}°")
     except Exception as e:
         print(f"Error moving camera: {e}")
         import traceback

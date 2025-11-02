@@ -562,11 +562,26 @@
         window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
         function pollGamepadInput() {
             if (!activeGamepad) return false;
-            const gp = navigator.getGamepads()[activeGamepad.index];
-            if (!gp) {
+            const gamepads = navigator.getGamepads();
+            if (!gamepads || gamepads.length === 0) {
                 activeGamepad = null;
                 lastGamepadActive = false;
                 return false;
+            }
+            const gp = gamepads[activeGamepad.index];
+            if (!gp) {
+                // Try to find any connected gamepad
+                for (let i = 0; i < gamepads.length; i++) {
+                    if (gamepads[i]) {
+                        activeGamepad = gamepads[i];
+                        break;
+                    }
+                }
+                if (!activeGamepad) {
+                    lastGamepadActive = false;
+                    return false;
+                }
+                return pollGamepadInput(); // Recursive call with new gamepad
             }
             const leftStickX = gp.axes[0] || 0;
             const leftStickY = gp.axes[1] || 0;
@@ -663,8 +678,24 @@
             return true;
         }
         function gamepadLoop() {
-            if (!activeGamepad) return;
-            pollGamepadInput();
+            if (!activeGamepad) {
+                // Check if gamepad got disconnected
+                const gamepads = navigator.getGamepads();
+                if (gamepads && gamepads.length > 0) {
+                    for (let i = 0; i < gamepads.length; i++) {
+                        if (gamepads[i]) {
+                            handleGamepadConnected(gamepads[i]);
+                            break;
+                        }
+                    }
+                }
+                return;
+            }
+            try {
+                pollGamepadInput();
+            } catch (error) {
+                console.error('Error in gamepad polling:', error);
+            }
             requestAnimationFrame(gamepadLoop);
         }
         // --- Initial Status Fetch ---
@@ -686,3 +717,4 @@
     </script>
 </body>
 </html>
+
