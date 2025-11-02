@@ -109,6 +109,15 @@ def handle_stop_command():
 def handle_camera_command(data):
     """Handle relative camera movement commands - only update when there's actual input"""
     global servo1_position, servo2_position
+    
+    # Check if this is a center command
+    if data.get('center', False):
+        servo1_position = 90
+        servo2_position = 90
+        servo1.angle = 90
+        servo2.angle = 90
+        return
+    
     try:
         pan_delta = float(data.get('pan', 0))  # Horizontal movement
         tilt_delta = float(data.get('tilt', 0))  # Vertical movement

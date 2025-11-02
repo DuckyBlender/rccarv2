@@ -151,6 +151,20 @@
         .buttons-grid .button-a { grid-column: 1; grid-row: 2; }
         .buttons-grid .button-s { grid-column: 2; grid-row: 3; }
         .buttons-grid .button-d { grid-column: 3; grid-row: 2; }
+        
+        .buttons-grid .camera-button {
+            font-size: 1.8em;
+            background-color: var(--success-color);
+        }
+        .buttons-grid .camera-button:hover {
+            background-color: var(--success-hover);
+        }
+        .buttons-grid #camera-up { grid-column: 2; grid-row: 1; }
+        .buttons-grid #camera-left { grid-column: 1; grid-row: 2; }
+        .buttons-grid #camera-center { grid-column: 2; grid-row: 2; background-color: var(--accent-color); }
+        .buttons-grid #camera-center:hover { background-color: var(--accent-hover); }
+        .buttons-grid #camera-right { grid-column: 3; grid-row: 2; }
+        .buttons-grid #camera-down { grid-column: 2; grid-row: 3; }
 
         .speed-slider-container {
             display: flex;
@@ -255,6 +269,17 @@
             </div>
 
             <div class="control-group">
+                <h3>Camera Control</h3>
+                <div class="buttons-grid">
+                    <button class="camera-button" id="camera-up" data-direction="up">↑</button>
+                    <button class="camera-button" id="camera-left" data-direction="left">←</button>
+                    <button class="camera-button" id="camera-center" data-direction="center">⌂</button>
+                    <button class="camera-button" id="camera-right" data-direction="right">→</button>
+                    <button class="camera-button" id="camera-down" data-direction="down">↓</button>
+                </div>
+            </div>
+
+            <div class="control-group">
                 <h3>Gamepad Control</h3>
                 <button id="connectGamepadButton">Connect Gamepad</button>
                 <div id="gamepadInfo" class="gamepad-status">Click "Connect Gamepad" and select your controller.</div>
@@ -264,7 +289,7 @@
 
     <footer>
         <p><strong>Gamepad Instructions:</strong> For best results, use a Chrome-based browser (Chrome, Edge, Opera). Click the "Connect Gamepad" button above and select your controller from the HID device list if prompted. Standard Gamepad API will be used after permission.</p>
-        <p>Keyboard controls: WASD for movement. Spacebar for STOP.</p>
+        <p><strong>Controls:</strong> Keyboard: WASD for movement, Spacebar for STOP. Gamepad: Left stick for movement, L2/R2 for steering, Right stick for camera control. On-screen buttons for camera pan/tilt.</p>
         <p>&copy; ${new Date().getFullYear()} RPi Car Project</p>
     </footer>
 
@@ -286,6 +311,45 @@
         const COMMAND_DEBOUNCE_INTERVAL = 75; // ms
         let lastCameraCommandTime = 0;
         const CAMERA_COMMAND_INTERVAL = 100; // ms - throttle camera commands to prevent over-correction
+        let cameraControlActive = false;
+        let cameraControlInterval = null;
+
+        function sendCameraCommand(pan, tilt) {
+            if (!wsConnected) return;
+            const now = Date.now();
+            if ((now - lastCameraCommandTime) >= CAMERA_COMMAND_INTERVAL) {
+                socket.emit('camera_command', { pan: pan, tilt: tilt });
+                lastCameraCommandTime = now;
+            }
+        }
+
+        function startCameraControl(direction) {
+            if (cameraControlActive) return;
+            cameraControlActive = true;
+            const CAMERA_STEP = 0.5; // Small step value for button control
+            
+            const directions = {
+                'up': { pan: 0, tilt: CAMERA_STEP },
+                'down': { pan: 0, tilt: -CAMERA_STEP },
+                'left': { pan: -CAMERA_STEP, tilt: 0 },
+                'right': { pan: CAMERA_STEP, tilt: 0 }
+            };
+            
+            const step = directions[direction];
+            if (!step) return;
+            
+            cameraControlInterval = setInterval(() => {
+                sendCameraCommand(step.pan, step.tilt);
+            }, CAMERA_COMMAND_INTERVAL);
+        }
+
+        function stopCameraControl() {
+            cameraControlActive = false;
+            if (cameraControlInterval) {
+                clearInterval(cameraControlInterval);
+                cameraControlInterval = null;
+            }
+        }
 
         function setupSocket() {
             socket = io();
@@ -389,16 +453,29 @@
         // --- On-Screen Button Listeners ---
         document.querySelectorAll('.buttons-grid button').forEach(button => {
             const key = button.dataset.key;
+            const direction = button.dataset.direction;
+            
             function pressButton() {
                 if (key === 'stop') {
                     sendStopCommandWS();
+                } else if (direction === 'center') {
+                    // Center camera servos
+                    if (wsConnected) {
+                        stopCameraControl();
+                        socket.emit('camera_command', { center: true });
+                    }
+                } else if (direction) {
+                    // Camera control
+                    startCameraControl(direction);
                 } else if (keyState.hasOwnProperty(key)) {
                     keyState[key] = true;
                     handleMovement();
                 }
             }
             function releaseButton() {
-                if (key !== 'stop' && keyState.hasOwnProperty(key)) {
+                if (direction && direction !== 'center') {
+                    stopCameraControl();
+                } else if (key !== 'stop' && keyState.hasOwnProperty(key)) {
                     keyState[key] = false;
                     handleMovement();
                 }
@@ -406,7 +483,11 @@
             button.addEventListener('mousedown', pressButton);
             button.addEventListener('mouseup', releaseButton);
             button.addEventListener('mouseleave', () => {
-                if (key !== 'stop' && keyState[key]) releaseButton();
+                if (direction && direction !== 'center') {
+                    stopCameraControl();
+                } else if (key !== 'stop' && keyState[key]) {
+                    releaseButton();
+                }
             });
             button.addEventListener('touchstart', (e) => { e.preventDefault(); pressButton(); }, { passive: false });
             button.addEventListener('touchend', (e) => { e.preventDefault(); releaseButton(); });
