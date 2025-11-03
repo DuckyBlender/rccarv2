@@ -214,7 +214,7 @@ def set_camera_absolute(pan, tilt):
         servo1_position = servo1_default
     else:
         # Map joystick to full servo range
-        servo2_position = int(90 + pan * 90)  # pan controls servo2
+        servo2_position = int(90 - pan * 90)  # pan controls servo2, inverted
         servo1_position = int(90 - tilt * 90)  # tilt controls servo1 (inverted)
 
         # Clamp to valid range
